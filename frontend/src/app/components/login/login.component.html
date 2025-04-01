@@ -1,0 +1,48 @@
+<div class="row justify-content-center mt-5">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">Agent Login</h4>
+      </div>
+      <div class="card-body">
+        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+          <div class="mb-3">
+            <label for="agentName" class="form-label">Agent Name</label>
+            <input 
+              type="text" 
+              class="form-control" 
+              id="agentName" 
+              formControlName="agentName"
+              placeholder="Enter your name"
+              [ngClass]="{'is-invalid': loginForm.get('agentName')?.invalid && loginForm.get('agentName')?.touched}"
+            >
+            <div class="invalid-feedback" *ngIf="loginForm.get('agentName')?.errors?.['required'] && loginForm.get('agentName')?.touched">
+              Agent name is required
+            </div>
+            <div class="invalid-feedback" *ngIf="loginForm.get('agentName')?.errors?.['minlength'] && loginForm.get('agentName')?.touched">
+              Agent name must be at least 3 characters
+            </div>
+          </div>
+          
+          <div class="d-grid">
+            <button 
+              type="submit" 
+              class="btn btn-primary" 
+              [disabled]="loginForm.invalid || submitting"
+            >
+              <span *ngIf="submitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Login as Agent
+            </button>
+          </div>
+          
+          <div *ngIf="error" class="alert alert-danger mt-3">
+            {{ error }}
+          </div>
+        </form>
+      </div>
+      <div class="card-footer text-muted">
+        <small>This demo simulates an agent interface for outbound SIP calls through LiveKit</small>
+      </div>
+    </div>
+  </div>
+</div>

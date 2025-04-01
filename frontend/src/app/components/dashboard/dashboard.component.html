@@ -1,0 +1,104 @@
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Agent Dashboard</h5>
+          <span class="badge bg-light text-dark">Agent: {{ agentName }}</span>
+        </div>
+        <div class="card-body">
+          <h5>Available Rooms</h5>
+          
+          <!-- Loading spinner -->
+          <div *ngIf="loading" class="text-center my-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+          
+          <!-- Error message -->
+          <div *ngIf="error" class="alert alert-danger">
+            {{ error }}
+          </div>
+          
+          <!-- Rooms list -->
+          <div *ngIf="!loading && rooms.length === 0" class="alert alert-info">
+            No rooms available. Create a new room to get started.
+          </div>
+          
+          <div *ngIf="!loading && rooms.length > 0" class="list-group mt-3">
+            <div *ngFor="let room of rooms" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-1">{{ room.name }}</h6>
+                <small>Created: {{ room.creationTime | date:'medium' }}</small>
+              </div>
+              <button class="btn btn-primary btn-sm" (click)="joinRoom(room.name)">
+                Join Room
+              </button>
+            </div>
+          </div>
+          
+          <button class="btn btn-outline-secondary mt-3" (click)="loadRooms()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh Rooms
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0">Create New Room</h5>
+        </div>
+        <div class="card-body">
+          <form [formGroup]="createRoomForm" (ngSubmit)="createRoom()">
+            <div class="mb-3">
+              <label for="roomName" class="form-label">Room Name</label>
+              <input 
+                type="text" 
+                class="form-control" 
+                id="roomName" 
+                formControlName="roomName"
+                placeholder="Enter room name"
+                [ngClass]="{'is-invalid': createRoomForm.get('roomName')?.invalid && createRoomForm.get('roomName')?.touched}"
+              >
+              <div class="invalid-feedback" *ngIf="createRoomForm.get('roomName')?.errors?.['required'] && createRoomForm.get('roomName')?.touched">
+                Room name is required
+              </div>
+              <div class="invalid-feedback" *ngIf="createRoomForm.get('roomName')?.errors?.['minlength'] && createRoomForm.get('roomName')?.touched">
+                Room name must be at least 3 characters
+              </div>
+              <div class="invalid-feedback" *ngIf="createRoomForm.get('roomName')?.errors?.['pattern'] && createRoomForm.get('roomName')?.touched">
+                Room name can only contain letters, numbers, hyphens and underscores
+              </div>
+              <small class="form-text text-muted">
+                Use a descriptive name like "appointment-scheduling" or "patient-call"
+              </small>
+            </div>
+            
+            <div class="d-grid">
+              <button 
+                type="submit" 
+                class="btn btn-info text-white" 
+                [disabled]="createRoomForm.invalid || loading"
+              >
+                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Create Room
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <div class="card mt-3">
+        <div class="card-body">
+          <div class="d-grid">
+            <button class="btn btn-outline-danger" (click)="logout()">
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

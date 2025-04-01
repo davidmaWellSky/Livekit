@@ -1,0 +1,37 @@
+# LiveKit SIP Server Configuration
+log_level: info
+
+# LiveKit connection
+livekit:
+  url: ws://localhost:7880
+  api_key: devkey
+  api_secret: secret
+
+# Redis configuration
+redis:
+  address: redis:6379
+  db: 0
+  
+# SIP configuration
+sip:
+  # SIP server binding address
+  addr: 0.0.0.0:5060
+  network: udp
+  realm: livekit-sip.local
+  
+  # HTTP management API
+  http_addr: 0.0.0.0:5080
+
+  # Outbound SIP settings
+  outbound:
+    enabled: true
+    from: "LiveKit SIP <sip:livekit@livekit-sip.local>"
+    default_trunk_id: local-trunk
+
+# Trunk configurations
+trunks:
+  - id: local-trunk
+    type: generic
+    domain: sip.twilio.com
+    # Twilio SIP domain typically follows this format
+    uri: "sip:${TWILIO_TRUNK_SID}@sip.twilio.com"

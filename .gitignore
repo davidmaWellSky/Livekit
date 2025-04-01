@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+package-lock.json
+*/package-lock.json
+**/package-lock.json
+yarn.lock
+*/yarn.lock
+**/yarn.lock
+
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+*/dist
+**/dist
+
+# Angular cache
+.angular/
+*/.angular/
+**/.angular/
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+*/.env
+**/.env
+
+# Build
+/build
+*/build
+**/build
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Miscellaneous
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+testem.log

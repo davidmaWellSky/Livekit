@@ -1,0 +1,26 @@
+/* Dashboard styling */
+.card {
+  margin-bottom: 20px;
+}
+
+.badge {
+  font-size: 0.9rem;
+}
+
+.list-group-item {
+  transition: background-color 0.2s;
+}
+
+.list-group-item:hover {
+  background-color: #f8f9fa;
+}
+
+.btn-outline-secondary {
+  border-color: #ced4da;
+}
+
+.btn-outline-secondary:hover {
+  background-color: #f8f9fa;
+  color: #212529;
+  border-color: #adb5bd;
+}

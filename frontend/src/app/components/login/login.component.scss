@@ -1,0 +1,22 @@
+/* Login form styling */
+.card {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+  border-bottom: none;
+}
+
+.form-control:focus {
+  border-color: #0056D6;
+  box-shadow: 0 0 0 0.25rem rgba(0, 86, 214, 0.25);
+}
+
+.btn-primary {
+  padding: 0.5rem 1rem;
+}
+
+.card-footer {
+  background-color: #f8f9fa;
+  border-top: none;
+}

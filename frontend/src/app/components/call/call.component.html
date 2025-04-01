@@ -1,0 +1,131 @@
+<div class="container-fluid call-page">
+  <!-- Room info bar -->
+  <div class="room-info-bar bg-dark text-white p-2 mb-4">
+    <div class="container">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <strong>Room:</strong> {{ roomName }}
+          <span class="badge ms-2" [ngClass]="connected ? 'bg-success' : 'bg-danger'">
+            {{ connected ? 'Connected' : 'Disconnecting...' }}
+          </span>
+        </div>
+        <button class="btn btn-outline-light btn-sm" (click)="exitRoom()">
+          Exit Room
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Error message -->
+    <div *ngIf="error" class="alert alert-danger">
+      {{ error }}
+    </div>
+
+    <div class="row">
+      <!-- Participants area -->
+      <div class="col-md-8">
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Call Session</h5>
+          </div>
+          <div class="card-body">
+            <!-- No participants -->
+            <div *ngIf="participants.length === 0" class="text-center py-5">
+              <div class="display-1 text-muted mb-3">
+                <i class="bi bi-people"></i>
+              </div>
+              <p class="lead">No active participants in this room</p>
+              <p class="text-muted">Start a call to connect with a patient</p>
+            </div>
+
+            <!-- Participants list -->
+            <div *ngIf="participants.length > 0" class="participants-grid">
+              <div *ngFor="let participant of participants" class="participant-tile p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0">{{ participant.identity }}</h6>
+                  <span class="badge" [ngClass]="participant.isSpeaking === true ? 'bg-success' : 'bg-secondary'">
+                    {{ participant.isSpeaking === true ? 'Speaking' : 'Silent' }}
+                  </span>
+                </div>
+                
+                <!-- Audio status indicator -->
+                <div class="d-flex align-items-center">
+                  <span class="me-2">
+                    <i class="bi" [ngClass]="(participant.audioTracks && participant.audioTracks.size > 0) ? 'bi-mic-fill text-success' : 'bi-mic-mute-fill text-danger'"></i>
+                  </span>
+                  <span class="audio-level-indicator">
+                    <div class="level" [style.width.%]="(participant.audioLevel || 0) * 100"></div>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Call status -->
+            <div *ngIf="activeCall" class="alert alert-info mt-3">
+              <div class="d-flex align-items-center">
+                <span class="spinner-grow spinner-grow-sm me-2" role="status"></span>
+                <span>Call in progress</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient dialing panel -->
+      <div class="col-md-4">
+        <!-- Show patient form if not in active call -->
+        <div *ngIf="!activeCall" class="card mb-4">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Call Patient</h5>
+          </div>
+          <div class="card-body">
+            <app-patient-form 
+              [roomName]="roomName"
+              (initiateCall)="initiateCall($event)"
+              (cancel)="hideForm()"
+            ></app-patient-form>
+          </div>
+        </div>
+
+        <!-- Show call controls if in active call -->
+        <div *ngIf="activeCall" class="card mb-4">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Call Controls</h5>
+          </div>
+          <div class="card-body">
+            <app-call-controls
+              (hangupCall)="hangupCall()"
+            ></app-call-controls>
+          </div>
+        </div>
+
+        <!-- AI Agent chat -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">AI Assistant</h5>
+          </div>
+          <div class="card-body p-0">
+            <app-agent-chat
+              [roomName]="roomName"
+              [patientName]="agentName"
+            ></app-agent-chat>
+          </div>
+        </div>
+
+        <!-- Room information card -->
+        <div class="card mb-4">
+          <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Room Information</h5>
+          </div>
+          <div class="card-body">
+            <p><strong>Room:</strong> {{ roomName }}</p>
+            <p><strong>Agent:</strong> {{ agentName }}</p>
+            <p><strong>Status:</strong> {{ connected ? 'Connected' : 'Disconnected' }}</p>
+            <p><strong>Participants:</strong> {{ participants.length }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

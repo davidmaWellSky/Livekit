@@ -1,0 +1,21 @@
+<div class="call-controls-container">
+  <div class="call-timer mb-3 text-center">
+    <div class="timer-value">{{ currentTime }}</div>
+    <div class="timer-label">Call Duration</div>
+  </div>
+  
+  <div class="call-buttons">
+    <button type="button" class="btn btn-danger btn-lg w-100" (click)="onHangup()">
+      <i class="bi bi-telephone-x-fill me-2"></i> End Call
+    </button>
+  </div>
+  
+  <div class="call-status mt-3">
+    <div class="alert alert-success">
+      <div class="d-flex align-items-center">
+        <span class="call-indicator me-2"></span>
+        <span>Call in progress</span>
+      </div>
+    </div>
+  </div>
+</div>

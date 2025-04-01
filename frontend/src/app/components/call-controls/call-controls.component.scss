@@ -1,0 +1,46 @@
+/* Call controls styling */
+.call-controls-container {
+  padding: 1rem;
+}
+
+.call-timer {
+  background-color: #212529;
+  color: white;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.timer-value {
+  font-size: 2rem;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.timer-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.call-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #28a745;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -1,0 +1,23 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install all dependencies including devDependencies
+RUN npm install
+RUN npm install -g @angular/cli@16.1.0
+RUN npm install --save-dev @angular-devkit/build-angular@16.1.0
+
+# Copy the rest of the application
+COPY . .
+
+# Run npm install again to catch any dependencies that need the source files
+RUN npm install
+
+# Expose port 4200 for the Angular development server
+EXPOSE 4200
+
+# Start the Angular development server
+CMD ["ng", "serve", "--host", "0.0.0.0", "--disable-host-check", "--poll", "2000"]

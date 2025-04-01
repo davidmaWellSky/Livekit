@@ -1,0 +1,39 @@
+<div class="agent-chat-container">
+  <div class="chat-header">
+    <h5>Chat with Healthcare Assistant</h5>
+  </div>
+  
+  <div class="chat-messages">
+    <div *ngFor="let message of messages" 
+         class="message-bubble" 
+         [ngClass]="{'agent-message': message.isAgent, 'patient-message': !message.isAgent}">
+      <div class="message-header">
+        <span class="sender-name">{{ message.sender }}</span>
+        <span class="message-time">{{ message.timestamp | date:'shortTime' }}</span>
+      </div>
+      <div class="message-content">
+        {{ message.message }}
+      </div>
+    </div>
+  </div>
+  
+  <div class="chat-input">
+    <form (ngSubmit)="sendMessage()" class="d-flex">
+      <input 
+        type="text" 
+        class="form-control me-2" 
+        placeholder="Type your message..." 
+        [(ngModel)]="newMessage"
+        name="messageInput"
+        autocomplete="off"
+      >
+      <button 
+        type="submit" 
+        class="btn btn-primary"
+        [disabled]="!newMessage.trim()"
+      >
+        Send
+      </button>
+    </form>
+  </div>
+</div>

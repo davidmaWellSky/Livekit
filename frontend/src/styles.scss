@@ -1,0 +1,59 @@
+/* You can add global styles to this file, and also import other style files */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f8f9fa;
+}
+
+.card {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 8px;
+}
+
+.btn-primary {
+  background-color: #0056D6;
+  border-color: #0056D6;
+}
+
+.btn-primary:hover {
+  background-color: #0043a9;
+  border-color: #0043a9;
+}
+
+.btn-danger {
+  background-color: #DC3545;
+  border-color: #DC3545;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.participant-tile {
+  background-color: #e9ecef;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.participant-video {
+  width: 100%;
+  border-radius: 8px;
+  background-color: #212529;
+}
+
+.call-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 1000;
+}
