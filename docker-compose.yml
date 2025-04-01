@@ -67,6 +67,7 @@ services:
       - TWILIO_CREDENTIAL_LIST_USERNAME=Livekit
       - TWILIO_CREDENTIAL_LIST_PASSWORD=Livekitpassword123
       - DEEPGRAM_URL=http://localhost:9012
+      - PUBLIC_HOSTNAME=localhost
     depends_on:
       - livekit
       - livekit-sip

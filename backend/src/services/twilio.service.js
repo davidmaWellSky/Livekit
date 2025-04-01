@@ -36,20 +36,22 @@ class TwilioService {
       const toNumber = this.normalizePhoneNumber(to);
       
       // Default callback URL that will connect the call to the LiveKit room
-      const livekitCallbackUrl = options.callbackUrl ||
-        `${options.baseUrl || 'http://localhost:8888'}/twilio/connect-to-room?roomName=${options.roomName}`;
+      // Since Twilio cannot reach our local server, we'll use TwiML directly
+      // instead of providing a URL for Twilio to fetch TwiML instructions
       
-      // Create the call
+      // Create call with inline TwiML, not using a callback URL
+      const twiml = this.generateConnectTwiml(options.message, options.roomName);
+      
+      console.log("Using TwiML directly:", twiml);
+      
+      // Create the call with the TwiML inline
       const call = await this.client.calls.create({
         to: toNumber,
         from: this.twilioPhoneNumber,
-        twiml: options.twiml || this.generateDefaultTwiml(options.message),
-        statusCallback: options.statusCallback || `${options.baseUrl || 'http://localhost:8888'}/twilio/call-status`,
+        twiml: twiml,
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
         statusCallbackMethod: 'POST',
-        record: options.record || false,
-        // If no TwiML is provided, use the URL to fetch TwiML
-        ...(options.twiml ? {} : { url: livekitCallbackUrl })
+        record: options.record || false
       });
       
       console.log(`Call initiated to ${toNumber} with SID: ${call.sid}`);
@@ -77,6 +79,51 @@ class TwilioService {
         <Say voice="alice">${message}</Say>
         <Pause length="1"/>
         <Say voice="alice">Connecting you now.</Say>
+      </Response>
+    `;
+  }
+  
+  /**
+   * Generate TwiML for connecting to a LiveKit room via SIP
+   * @param {string} message - Initial greeting message
+   * @param {string} roomName - The LiveKit room name
+   * @returns {string} - TwiML markup
+   */
+  generateConnectTwiml(message = 'Hello, this is your healthcare scheduling assistant calling. How can I help you today?', roomName) {
+    // Check if we have SIP trunk information
+    const hasSipInfo = process.env.TWILIO_TRUNK_SID &&
+                       process.env.TWILIO_TERMINATION_URI &&
+                       process.env.TWILIO_CREDENTIAL_LIST_USERNAME &&
+                       process.env.TWILIO_CREDENTIAL_LIST_PASSWORD;
+    
+    // If we have SIP info, try to connect via SIP to LiveKit
+    if (hasSipInfo) {
+      return `
+        <Response>
+          <Say voice="alice">${message}</Say>
+          <Pause length="1"/>
+          <Say voice="alice">Connecting you to your appointment scheduling assistant now.</Say>
+          <Dial>
+            <Sip username="${process.env.TWILIO_CREDENTIAL_LIST_USERNAME}"
+                 password="${process.env.TWILIO_CREDENTIAL_LIST_PASSWORD}">
+                sip:${roomName}@${process.env.TWILIO_TERMINATION_URI}
+            </Sip>
+          </Dial>
+        </Response>
+      `;
+    }
+    
+    // If we don't have SIP info, just provide a standard conversation
+    return `
+      <Response>
+        <Say voice="alice">${message}</Say>
+        <Pause length="1"/>
+        <Say voice="alice">
+          I'm sorry, but we're experiencing technical difficulties connecting you to the scheduling system.
+          Please try again later or call our main office directly. Thank you for your patience.
+        </Say>
+        <Pause length="1"/>
+        <Hangup />
       </Response>
     `;
   }

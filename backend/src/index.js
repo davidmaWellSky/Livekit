@@ -184,12 +184,13 @@ app.post('/call', async (req, res) => {
     if (!room || !phoneNumber) {
       return res.status(400).json({ error: 'Room and phone number are required' });
     }
-    
     // Use LiveKit Agent Manager to initiate the call
+    // Use localhost or the PUBLIC_HOSTNAME env var instead of req.hostname for Twilio callbacks
+    const publicHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
     const callDetails = await livekitAgentManager.callPatient(room, phoneNumber, {
       initialMessage: message,
-      baseUrl: `http://${req.hostname}:${PORT}`,
-      hostname: req.hostname
+      baseUrl: `http://${publicHostname}:${PORT}`,
+      hostname: publicHostname
     });
     
     res.json({
@@ -317,7 +318,7 @@ app.post('/twilio/connect-to-room', (req, res) => {
         <Pause length="1"/>
         <Say>The agent will help you schedule your appointment. Please wait while we get started.</Say>
         <!-- In a production system, you would use <Dial> with <Sip> to connect to LiveKit -->
-        <Stream url="wss://${req.hostname}:${PORT}/twilio/media-stream?roomName=${roomName}">
+        <Stream url="wss://${process.env.PUBLIC_HOSTNAME || 'localhost'}:${PORT}/twilio/media-stream?roomName=${roomName}">
           <Parameter name="roomName" value="${roomName}"/>
         </Stream>
       </Response>
