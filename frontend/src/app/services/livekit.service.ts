@@ -13,6 +13,7 @@ import {
 } from 'livekit-client';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -49,7 +50,7 @@ export class LivekitService {
               this.setupRoomListeners();
 
               // Connect to the room
-              await this.room.connect(`ws://${window.location.hostname}:7880`, token);
+              await this.room.connect(environment.livekitHost, token);
               console.log('Connected to room:', roomName);
               this._connected.next(true);
               

@@ -52,43 +52,51 @@ services:
     restart: unless-stopped
 
   # Backend service
-  # backend:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   networks:
-  #     - livekit-net
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./backend:/app
-  #     - /app/node_modules
-  #   environment:
-  #     - LIVEKIT_HOST=livekit:7880
-  #     - LIVEKIT_API_KEY=devkey
-  #     - LIVEKIT_API_SECRET=secret
-  #     - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-  #     - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-  #     - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
-  #     - TWILIO_TRUNK_SID=${TWILIO_TRUNK_SID}
-  #     - SIP_TRUNK_ID=local-trunk
-  #   depends_on:
-  #     - livekit
-  #     - livekit-sip
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    networks:
+      - livekit-net
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - PORT=3001
+      - LIVEKIT_HOST=livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - TWILIO_ACCOUNT_SID=AC795b72a1fd1d4d84558b27d091bf2b36
+      - TWILIO_AUTH_TOKEN=d8b9eb3f389cab6841d151e451551baa
+      - TWILIO_PHONE_NUMBER=+14322878106
+      - TWILIO_TRUNK_SID=TK5e027325026cab68bc52f419561e19b3
+      - TWILIO_TERMINATION_URI=aiagenticlivekit.pstn.twilio.com
+      - TWILIO_CREDENTIAL_LIST_USERNAME=Livekit
+      - TWILIO_CREDENTIAL_LIST_PASSWORD=Livekitpassword123
+      - DEEPGRAM_URL=http://host.docker.internal:9012
+    depends_on:
+      - livekit
+      - livekit-sip
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
   # Frontend application
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   networks:
-  #     - livekit-net
-  #   ports:
-  #     - "4200:80"
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     - backend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    networks:
+      - livekit-net
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - PORT=4200
+    depends_on:
+      - backend
+    restart: unless-stopped

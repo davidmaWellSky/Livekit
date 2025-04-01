@@ -1,5 +1,5 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:3001',
-  livekitHost: 'ws://localhost:7880'
+  apiUrl: 'http://backend:3001',
+  livekitHost: 'ws://livekit:7880'
 };

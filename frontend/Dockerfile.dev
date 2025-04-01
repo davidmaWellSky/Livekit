@@ -5,16 +5,16 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install all dependencies including devDependencies
-RUN npm install
-RUN npm install -g @angular/cli@16.1.0
-RUN npm install --save-dev @angular-devkit/build-angular@16.1.0
+# Install all dependencies including devDependencies with legacy peer deps to handle potential npm registry issues
+RUN npm install --legacy-peer-deps
+RUN npm install -g @angular/cli@16.1.0 --legacy-peer-deps
+RUN npm install --save-dev @angular-devkit/build-angular@16.1.0 --legacy-peer-deps
 
 # Copy the rest of the application
 COPY . .
 
 # Run npm install again to catch any dependencies that need the source files
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Expose port 4200 for the Angular development server
 EXPOSE 4200

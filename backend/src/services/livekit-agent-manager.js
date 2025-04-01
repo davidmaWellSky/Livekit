@@ -1,5 +1,7 @@
 const { RoomServiceClient, Room, AccessToken } = require('livekit-server-sdk');
 const AIAgent = require('./ai-agent');
+const deepgramService = require('./deepgram.service');
+const twilioService = require('./twilio.service');
 
 class LiveKitAgentManager {
   constructor() {
@@ -15,11 +17,87 @@ class LiveKitAgentManager {
       this.livekitApiSecret
     );
     
-    // Track active AI agent instances
+    // Track active AI agent instances and calls
     this.activeAgents = new Map(); // roomName -> AIAgent instance
+    this.activeCalls = new Map(); // roomName -> call details
     
-    // Speech recognition and synthesis would be integrated here in a production system
     console.log('LiveKit Agent Manager initialized');
+  }
+  
+  /**
+   * Initiate an outbound call to a patient via Twilio
+   * @param {string} roomName - LiveKit room name
+   * @param {string} phoneNumber - Patient phone number
+   * @param {Object} options - Additional call options
+   * @returns {Promise<Object>} - Call details
+   */
+  async callPatient(roomName, phoneNumber, options = {}) {
+    try {
+      // Check if room exists, create if not
+      await this.ensureRoomExists(roomName);
+      
+      // Ensure AI agent is ready
+      await this.createAgentForRoom(roomName);
+      
+      // Generate initial greeting message
+      const initialMessage = options.initialMessage ||
+        "Hello, this is your healthcare scheduling assistant calling. How can I help you today?";
+      
+      // Make the Twilio call
+      const callDetails = await twilioService.makeCall(phoneNumber, {
+        roomName,
+        message: initialMessage,
+        baseUrl: options.baseUrl || `http://${options.hostname || 'localhost'}:${process.env.PORT || 3001}`,
+        record: options.record || false
+      });
+      
+      // Store call details
+      this.activeCalls.set(roomName, {
+        sid: callDetails.sid,
+        phoneNumber,
+        status: callDetails.status,
+        startTime: new Date(),
+        agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
+      });
+      
+      console.log(`Outbound call initiated to ${phoneNumber} for room ${roomName}`);
+      return {
+        callSid: callDetails.sid,
+        roomName,
+        status: callDetails.status,
+        agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
+      };
+    } catch (error) {
+      console.error(`Error initiating call to ${phoneNumber} for room ${roomName}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * End an active call
+   * @param {string} roomName - LiveKit room name
+   * @returns {Promise<boolean>} - Success status
+   */
+  async endCall(roomName) {
+    try {
+      const callDetails = this.activeCalls.get(roomName);
+      if (!callDetails) {
+        console.warn(`No active call found for room ${roomName}`);
+        return false;
+      }
+      
+      // End the Twilio call
+      await twilioService.endCall(callDetails.sid);
+      
+      // Remove from active calls
+      this.activeCalls.delete(roomName);
+      
+      console.log(`Call ended for room ${roomName}`);
+      return true;
+    } catch (error) {
+      console.error(`Error ending call for room ${roomName}:`, error);
+      throw error;
+    }
   }
 
   // Create and add an AI agent to a room
@@ -101,7 +179,13 @@ class LiveKitAgentManager {
     return this.activeAgents.get(roomName);
   }
   
-  // Process incoming message from a patient
+  /**
+   * Process incoming message from a patient
+   * @param {string} roomName - LiveKit room name
+   * @param {string} message - Text message from patient
+   * @param {string} patientName - Patient name or identifier
+   * @returns {Promise<Object>} - Agent response with text and audio
+   */
   async processPatientMessage(roomName, message, patientName = 'Patient') {
     try {
       const agentData = this.activeAgents.get(roomName);
@@ -110,14 +194,48 @@ class LiveKitAgentManager {
         throw new Error(`No AI agent found for room ${roomName}`);
       }
       
+      // Process message with AI agent and get response with audio
       const response = await agentData.agent.processMessage(message, patientName);
       
-      // In a complete implementation, we would convert this response to speech
-      // and send it through LiveKit to the patient
+      console.log(`Processed message from ${patientName} in room ${roomName}`);
       
+      // In a complete implementation, we would stream the audio response
+      // through LiveKit to the patient
       return response;
     } catch (error) {
       console.error(`Error processing patient message in room ${roomName}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Process audio from a patient
+   * @param {string} roomName - LiveKit room name
+   * @param {Buffer} audioData - Audio data from patient
+   * @param {Object} options - Audio processing options
+   * @returns {Promise<Object>} - Agent response with text and audio
+   */
+  async processPatientAudio(roomName, audioData, options = {}) {
+    try {
+      const agentData = this.activeAgents.get(roomName);
+      
+      if (!agentData) {
+        throw new Error(`No AI agent found for room ${roomName}`);
+      }
+      
+      // Process audio with AI agent
+      const response = await agentData.agent.processAudio(audioData, {
+        patientName: options.patientName || 'Patient',
+        ...options
+      });
+      
+      console.log(`Processed audio from patient in room ${roomName}`);
+      
+      // In a complete implementation, we would stream the audio response
+      // through LiveKit to the patient
+      return response;
+    } catch (error) {
+      console.error(`Error processing patient audio in room ${roomName}:`, error);
       throw error;
     }
   }
