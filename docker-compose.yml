@@ -1,68 +1,59 @@
 version: '3'
 
-networks:
-  livekit-net:
-    driver: bridge
-
 services:
   # Redis for LiveKit SIP server
   redis:
     image: redis:alpine
-    networks:
-      - livekit-net
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     command: redis-server --appendonly yes
+    networks:
+      - livekit-network
 
   # LiveKit server
   livekit:
     image: livekit/livekit-server:latest
-    networks:
-      - livekit-net
-    command: --dev --bind 0.0.0.0 --node-ip host.docker.internal
+    command: --dev --bind 0.0.0.0 --node-ip livekit
     environment:
       - "LIVEKIT_KEYS=devkey: secret"
-    ports:
-      - "7880:7880"      # HTTP port
-      - "7881:7881/tcp"  # WebRTC TCP port
-      - "7882:7882/udp"  # WebRTC UDP port
+      - "LIVEKIT_SERVER_DISABLE_CORS=true"
+      - "LIVEKIT_PORT=7880"
+      - "LIVEKIT_RTC_PORT=7882"
     restart: unless-stopped
     depends_on:
       - redis
+    ports:
+      - "7880:7880"
+      - "7882:7882/udp"
+    networks:
+      - livekit-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   # LiveKit SIP server
   livekit-sip:
     image: livekit/sip:latest
-    networks:
-      - livekit-net
     depends_on:
       - livekit
       - redis
     command: ["--config", "/sip/config.yaml"]
-    ports:
-      - "5060:5060/udp"  # SIP signaling port
-      - "5080:5080"      # HTTP API port
     volumes:
       - ./livekit-sip-config.yaml:/sip/config.yaml
     environment:
       - SIP_TRUNK_ID=local-trunk
     restart: unless-stopped
+    networks:
+      - livekit-network
 
   # Backend service
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    networks:
-      - livekit-net
-    ports:
-      - "3001:3001"
     volumes:
       - ./backend:/app
       - /app/node_modules
+    ports:
+      - "3001:3001"
     environment:
       - PORT=3001
       - LIVEKIT_HOST=livekit:7880
@@ -75,21 +66,19 @@ services:
       - TWILIO_TERMINATION_URI=aiagenticlivekit.pstn.twilio.com
       - TWILIO_CREDENTIAL_LIST_USERNAME=Livekit
       - TWILIO_CREDENTIAL_LIST_PASSWORD=Livekitpassword123
-      - DEEPGRAM_URL=http://host.docker.internal:9012
+      - DEEPGRAM_URL=http://localhost:9012
     depends_on:
       - livekit
       - livekit-sip
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - livekit-network
 
   # Frontend application
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    networks:
-      - livekit-net
     ports:
       - "4200:4200"
     volumes:
@@ -100,3 +89,9 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - livekit-network
+
+networks:
+  livekit-network:
+    driver: bridge

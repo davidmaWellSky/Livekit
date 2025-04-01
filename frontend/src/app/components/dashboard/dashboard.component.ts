@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { LivekitService } from '../../services/livekit.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -18,10 +19,15 @@ export class DashboardComponent implements OnInit {
   constructor(
     private router: Router,
     private fb: FormBuilder,
-    private apiService: ApiService
+    private apiService: ApiService,
+    private livekitService: LivekitService
   ) {
+    // Generate a random room name
+    const randomRoomName = this.generateRandomRoomName();
+    
     this.createRoomForm = this.fb.group({
-      roomName: ['', [Validators.required, Validators.minLength(3), Validators.pattern('^[a-zA-Z0-9-_]+$')]]
+      roomName: [randomRoomName, [Validators.required, Validators.minLength(3), Validators.pattern('^[a-zA-Z0-9-_]+$')]],
+      phoneNumber: ['', [Validators.required, Validators.pattern('^\\+?[1-9]\\d{1,14}$')]]
     });
   }
 
@@ -63,13 +69,25 @@ export class DashboardComponent implements OnInit {
     }
 
     const roomName = this.createRoomForm.get('roomName')?.value;
+    const phoneNumber = this.createRoomForm.get('phoneNumber')?.value;
     this.loading = true;
     
+    // Create a room and then automatically join it and initiate call
     this.apiService.createRoom(roomName).subscribe({
       next: () => {
+        // Add logging
+        console.log(`Creating room: ${roomName} and calling: ${phoneNumber}`);
+        
+        // Navigate to the call component which will automatically connect to the room
+        this.router.navigate(['/call', roomName], {
+          state: {
+            autoCall: true,
+            phoneNumber: phoneNumber
+          }
+        });
+        
         this.loading = false;
         this.createRoomForm.reset();
-        this.loadRooms();
       },
       error: (err) => {
         console.error('Failed to create room:', err);
@@ -83,8 +101,29 @@ export class DashboardComponent implements OnInit {
     this.router.navigate(['/call', roomName]);
   }
 
+  /**
+   * Regenerates the room name with a new random value
+   */
+  regenerateRoomName(): void {
+    const newRoomName = this.generateRandomRoomName();
+    this.createRoomForm.get('roomName')?.setValue(newRoomName);
+  }
+
   logout(): void {
     localStorage.removeItem('agentName');
     this.router.navigate(['/login']);
+  }
+
+  /**
+   * Generates a random room name with a descriptive prefix and numeric suffix
+   * Format: [purpose]-[timestamp]-[random]
+   */
+  private generateRandomRoomName(): string {
+    const prefixes = ['call', 'meeting', 'appointment', 'consult'];
+    const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const timestamp = new Date().getTime().toString().slice(-6); // Last 6 digits of timestamp
+    const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    
+    return `${randomPrefix}-${timestamp}-${randomNum}`;
   }
 }

@@ -5,8 +5,16 @@
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <strong>Room:</strong> {{ roomName }}
-          <span class="badge ms-2" [ngClass]="connected ? 'bg-success' : 'bg-danger'">
-            {{ connected ? 'Connected' : 'Disconnecting...' }}
+          <span class="badge ms-2"
+                [ngClass]="{
+                  'bg-success': connected,
+                  'bg-warning': !connected && connectionState !== 'disconnected',
+                  'bg-danger': connectionState === 'disconnected' || connectionState === 'connection_error' || connectionState === 'initialization_error'
+                }">
+            {{ connectionState }}
+          </span>
+          <span class="badge ms-2" *ngIf="activeCall" [ngClass]="{'bg-info': activeCall}">
+            Call Active
           </span>
         </div>
         <button class="btn btn-outline-light btn-sm" (click)="exitRoom()">
@@ -123,6 +131,45 @@
             <p><strong>Agent:</strong> {{ agentName }}</p>
             <p><strong>Status:</strong> {{ connected ? 'Connected' : 'Disconnected' }}</p>
             <p><strong>Participants:</strong> {{ participants.length }}</p>
+          </div>
+        </div>
+        
+        <!-- Call Logs - More Prominent -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Connection Status & Logs</h5>
+            <span class="badge bg-info">{{ callLogs.length }}</span>
+          </div>
+          <div class="card-body p-0">
+            <!-- Connection State Summary -->
+            <div class="connection-state-summary p-2 border-bottom"
+                [ngClass]="{
+                  'bg-light': connectionState === 'connected',
+                  'bg-warning bg-opacity-25': connectionState.includes('request') || connectionState.includes('initializing'),
+                  'bg-danger bg-opacity-25': connectionState.includes('error')
+                }">
+              <p class="mb-1"><strong>Current State:</strong> <span class="text-uppercase">{{ connectionState }}</span></p>
+              <p class="mb-0"><small>Connection to LiveKit: {{ environment.livekitHost }}</small></p>
+            </div>
+            
+            <!-- Logs with improved visibility -->
+            <div class="call-logs-container" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
+              <div *ngIf="callLogs.length === 0" class="p-3 text-center text-muted">
+                No logs available
+              </div>
+              <ul class="list-group list-group-flush" *ngIf="callLogs.length > 0">
+                <li *ngFor="let log of callLogs"
+                    class="list-group-item list-group-item-action py-1 px-3"
+                    [ngClass]="{
+                      'list-group-item-success': log.includes('SUCCESS') || log.includes('successfully'),
+                      'list-group-item-danger': log.includes('ERROR') || log.includes('error') || log.includes('failed'),
+                      'list-group-item-warning': log.includes('WARNING') || log.includes('attempting'),
+                      'list-group-item-info': log.includes('CONNECTION') || log.includes('CONNECTING') || log.includes('ROOM') || log.includes('TOKEN')
+                    }">
+                  {{ log }}
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

@@ -3,15 +3,13 @@ import {
   Room,
   RoomEvent,
   RemoteParticipant,
-  RemoteTrackPublication,
-  RemoteTrack,
   Track,
   Participant,
   ConnectionState,
   ParticipantEvent,
   LocalParticipant
 } from 'livekit-client';
-import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Observable, firstValueFrom, Subject } from 'rxjs';
 import { ApiService } from './api.service';
 import { environment } from '../../environments/environment';
 
@@ -24,50 +22,77 @@ export class LivekitService {
   private _connected = new BehaviorSubject<boolean>(false);
   private _activeCall = new BehaviorSubject<boolean>(false);
   private _callParticipantId = new BehaviorSubject<string | null>(null);
+  private _logs = new Subject<string>();
+  private _connectionState = new BehaviorSubject<string>('disconnected');
 
   public participants$ = this._participants.asObservable();
   public connected$ = this._connected.asObservable();
   public activeCall$ = this._activeCall.asObservable();
   public callParticipantId$ = this._callParticipantId.asObservable();
+  public logs$ = this._logs.asObservable();
+  public connectionState$ = this._connectionState.asObservable();
 
   constructor(private apiService: ApiService) {}
 
   // Initialize and connect to a LiveKit room
   connect(identity: string, roomName: string): void {
+    this.log(`CONNECTING: Room ${roomName} | Identity ${identity}`);
+    this._connectionState.next('requesting_token');
+    
     // Get token from API
     this.apiService.getToken(identity, roomName).subscribe({
-      next: (response) => {
-        const token = response.token;
-        
-        // Create a new room if it doesn't exist
-        this.apiService.createRoom(roomName).subscribe({
-          next: async () => {
-            try {
-              // Create a new room instance
-              this.room = new Room();
+      next: async (response) => {
+        try {
+          const token = response.token;
+          
+          this.log(`TOKEN: Successfully obtained token for ${identity} in room ${roomName}`);
+          
+          // Determine the best LiveKit host to use
+          const livekitHost = await this.determineBestLiveKitHost();
+          this.log(`CONFIG: LiveKit host is: ${livekitHost}`);
+          
+          this._connectionState.next('initializing_room');
+          
+          // Create a new room instance
+          // Create Room with simple options
+          this.room = new Room({
+            adaptiveStream: true,
+            dynacast: true,
+            stopLocalTrackOnUnpublish: true
+          });
+          
+          this.log('ROOM: Room instance created successfully');
 
-              // Set up room event listeners
-              this.setupRoomListeners();
+          // Set up room event listeners
+          this.setupRoomListeners();
+          this.log('LISTENERS: Room event listeners set up');
+          this._connectionState.next('connecting');
 
-              // Connect to the room
-              await this.room.connect(environment.livekitHost, token);
-              console.log('Connected to room:', roomName);
-              this._connected.next(true);
-              
-              // Update participants
-              this.updateParticipants();
-            } catch (error) {
-              console.error('Failed to connect to room:', error);
-              this._connected.next(false);
-            }
-          },
-          error: (err) => {
-            console.error('Failed to create room:', err);
+          try {
+            // Connect to the room
+            this.log(`CONNECTING: Attempting to connect to LiveKit at ${livekitHost}`);
+            await this.room.connect(livekitHost, token);
+            this.log(`SUCCESS: Connected to room: ${roomName}`);
+            this._connectionState.next('connected');
+            this._connected.next(true);
+            
+            // Update participants
+            this.updateParticipants();
+          } catch (error) {
+            this.log(`ERROR: Failed to connect to room: ${error}`);
+            this._connectionState.next('connection_error');
+            console.error('Failed to connect to room:', error);
             this._connected.next(false);
           }
-        });
+        } catch (error) {
+          this.log(`ERROR: Room initialization error: ${error}`);
+          this._connectionState.next('initialization_error');
+          console.error('Failed to initialize room:', error);
+          this._connected.next(false);
+        }
       },
       error: (err) => {
+        this.log(`Failed to get token: ${err}`);
         console.error('Failed to get token:', err);
         this._connected.next(false);
       }
@@ -77,12 +102,14 @@ export class LivekitService {
   // Disconnect from the room
   disconnect(): void {
     if (this.room) {
+      this.log('Disconnecting from room');
       this.room.disconnect();
       this.room = undefined;
       this._connected.next(false);
       this._participants.next([]);
       this._activeCall.next(false);
       this._callParticipantId.next(null);
+      this.log('Successfully disconnected from room');
     }
   }
 
@@ -93,11 +120,13 @@ export class LivekitService {
         throw new Error('Not connected to a room');
       }
 
+      this.log(`Initiating call to ${phoneNumber} in room ${roomName}`);
       const response = await firstValueFrom(this.apiService.initiateCall(roomName, phoneNumber));
-      console.log('Call initiated:', response);
+      this.log(`Call initiated - SIP call ID: ${response.callId}`);
       this._activeCall.next(true);
       this._callParticipantId.next(response.callId);
     } catch (error) {
+      this.log(`Error initiating call: ${error}`);
       console.error('Failed to initiate call:', error);
       throw error;
     }
@@ -111,11 +140,13 @@ export class LivekitService {
         throw new Error('No active call participant ID');
       }
 
+      this.log(`Hanging up call with participant ID: ${participantId}`);
       await firstValueFrom(this.apiService.hangupCall(roomName, participantId));
-      console.log('Call hung up');
+      this.log('Call successfully terminated');
       this._activeCall.next(false);
       this._callParticipantId.next(null);
     } catch (error) {
+      this.log(`Error hanging up call: ${error}`);
       console.error('Failed to hang up call:', error);
       throw error;
     }
@@ -141,35 +172,99 @@ export class LivekitService {
   }
 
   // Set up room event listeners
+  // Log messages both to console and to the logs subject
+  private log(message: string): void {
+    const timestamp = new Date().toLocaleTimeString();
+    const formattedMessage = `[${timestamp}] ${message}`;
+    this._logs.next(formattedMessage);
+    console.log(`[LiveKit] ${message}`);
+  }
+
   private setupRoomListeners(): void {
     if (!this.room) return;
 
     this.room
-      .on(RoomEvent.ParticipantConnected, () => {
-        console.log('Participant connected');
+      .on(RoomEvent.ParticipantConnected, (participant: Participant) => {
+        this.log(`Participant connected: ${participant.identity}`);
         this.updateParticipants();
+        
+        // Check if this might be our SIP participant
+        if (participant.identity.includes('sip:') || participant.identity.includes('phone:')) {
+          this.log(`Detected potential SIP call participant: ${participant.identity}`);
+          this._activeCall.next(true);
+          this._callParticipantId.next(participant.sid);
+        }
       })
-      .on(RoomEvent.ParticipantDisconnected, () => {
-        console.log('Participant disconnected');
+      .on(RoomEvent.ParticipantDisconnected, (participant: Participant) => {
+        this.log(`Participant disconnected: ${participant.identity}`);
+        
+        // Check if this was our SIP participant
+        if (participant.sid === this._callParticipantId.value) {
+          this.log('SIP call participant disconnected, ending call');
+          this._activeCall.next(false);
+          this._callParticipantId.next(null);
+        }
+        
         this.updateParticipants();
       })
       .on(RoomEvent.Disconnected, () => {
-        console.log('Disconnected from room');
+        this.log('Disconnected from room');
         this._connected.next(false);
         this._participants.next([]);
         this._activeCall.next(false);
         this._callParticipantId.next(null);
       })
       .on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.log('Track subscribed:', track.kind);
+        this.log(`Track subscribed: ${track.kind} from ${participant.identity}`);
         
         // If this is an audio track from SIP participant
         if (track.kind === Track.Kind.Audio && participant instanceof RemoteParticipant) {
+          this.log(`Attaching audio track from ${participant.identity}`);
+          
           // Handle audio track (e.g., attaching to audio element)
           const audioElement = new Audio();
           audioElement.srcObject = new MediaStream([track.mediaStreamTrack]);
-          audioElement.play();
+          audioElement.play().catch(error => {
+            this.log(`Error playing audio: ${error}`);
+          });
         }
+      })
+      .on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
+        this.log(`Connection state changed: ${state}`);
+        this._connectionState.next(state);
+        
+        // Update connected status based on connection state
+        if (state === ConnectionState.Connected) {
+          this._connected.next(true);
+        } else if (state === ConnectionState.Disconnected) {
+          this._connected.next(false);
+        }
+      })
+      .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+        this.log(`Connection quality changed for ${participant.identity}: ${quality}`);
+      })
+      .on(RoomEvent.MediaDevicesError, (error) => {
+        this.log(`Media devices error: ${error.message}`);
       });
+  }
+
+  /**
+   * Determines the best LiveKit host URL to use
+   * Since we're using host networking, localhost should always work
+   */
+  private async determineBestLiveKitHost(): Promise<string> {
+    // Get the host from environment (should be localhost with our new config)
+    const configuredHost = environment.livekitHost;
+    this.log(`Configured LiveKit host: ${configuredHost}`);
+    
+    // Always use localhost (127.0.0.1) for WebRTC connection reliability
+    const localHost = 'ws://localhost:7880';
+    
+    if (configuredHost !== localHost) {
+      this.log(`Overriding configured host with ${localHost} for better connectivity`);
+      return localHost;
+    }
+    
+    return configuredHost;
   }
 }

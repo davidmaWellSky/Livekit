@@ -154,14 +154,22 @@ app.post('/rooms', async (req, res) => {
       maxParticipants: 10
     });
 
-    // Automatically create AI agent for this room
-    await livekitAgentManager.createAgentForRoom(name);
-
-    res.json({ 
-      success: true, 
+    // Send response immediately after room creation
+    res.json({
+      success: true,
       room: name,
-      aiAgent: true 
+      aiAgent: true
     });
+    
+    // Create AI agent in the background (non-blocking)
+    // This prevents timeout issues while waiting for agent creation
+    livekitAgentManager.createAgentForRoom(name)
+      .then(() => {
+        console.log(`AI agent created for room ${name} in background`);
+      })
+      .catch(agentError => {
+        console.error(`Error creating AI agent for room ${name} in background:`, agentError);
+      });
   } catch (error) {
     console.error('Create room error:', error);
     res.status(500).json({ error: 'Failed to create room' });

@@ -1,5 +1,6 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://backend:3001',
+  apiUrl: '/api',
+  // Using Docker container name for networking
   livekitHost: 'ws://livekit:7880'
 };

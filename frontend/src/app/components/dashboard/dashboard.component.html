@@ -54,14 +54,19 @@
           <form [formGroup]="createRoomForm" (ngSubmit)="createRoom()">
             <div class="mb-3">
               <label for="roomName" class="form-label">Room Name</label>
-              <input 
-                type="text" 
-                class="form-control" 
-                id="roomName" 
-                formControlName="roomName"
-                placeholder="Enter room name"
-                [ngClass]="{'is-invalid': createRoomForm.get('roomName')?.invalid && createRoomForm.get('roomName')?.touched}"
-              >
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="form-control"
+                  id="roomName"
+                  formControlName="roomName"
+                  placeholder="Enter room name"
+                  [ngClass]="{'is-invalid': createRoomForm.get('roomName')?.invalid && createRoomForm.get('roomName')?.touched}"
+                >
+                <button class="btn btn-outline-secondary" type="button" (click)="regenerateRoomName()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
               <div class="invalid-feedback" *ngIf="createRoomForm.get('roomName')?.errors?.['required'] && createRoomForm.get('roomName')?.touched">
                 Room name is required
               </div>
@@ -76,14 +81,35 @@
               </small>
             </div>
             
+            <div class="mb-3">
+              <label for="phoneNumber" class="form-label">Patient Phone Number</label>
+              <input
+                type="tel"
+                class="form-control"
+                id="phoneNumber"
+                formControlName="phoneNumber"
+                placeholder="+1234567890"
+                [ngClass]="{'is-invalid': createRoomForm.get('phoneNumber')?.invalid && createRoomForm.get('phoneNumber')?.touched}"
+              >
+              <div class="invalid-feedback" *ngIf="createRoomForm.get('phoneNumber')?.errors?.['required'] && createRoomForm.get('phoneNumber')?.touched">
+                Phone number is required
+              </div>
+              <div class="invalid-feedback" *ngIf="createRoomForm.get('phoneNumber')?.errors?.['pattern'] && createRoomForm.get('phoneNumber')?.touched">
+                Please enter a valid phone number in E.164 format (e.g., +1234567890)
+              </div>
+              <small class="form-text text-muted">
+                Enter phone number in E.164 format (e.g., +1234567890)
+              </small>
+            </div>
+            
             <div class="d-grid">
-              <button 
-                type="submit" 
-                class="btn btn-info text-white" 
+              <button
+                type="submit"
+                class="btn btn-info text-white"
                 [disabled]="createRoomForm.invalid || loading"
               >
                 <span *ngIf="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Create Room
+                Create Room & Call Patient
               </button>
             </div>
           </form>
