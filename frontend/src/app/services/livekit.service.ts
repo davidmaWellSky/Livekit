@@ -120,6 +120,10 @@ export class LivekitService {
         throw new Error('Not connected to a room');
       }
 
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        throw new Error('Phone number is required to make a call');
+      }
+
       this.log(`Initiating call to ${phoneNumber} in room ${roomName}`);
       const response = await firstValueFrom(this.apiService.initiateCall(roomName, phoneNumber));
       this.log(`Call initiated - Call SID: ${response.callSid}, Participant ID: ${response.callParticipantId || 'Unknown'}`);

@@ -1,6 +1,6 @@
 <form [formGroup]="patientForm" (ngSubmit)="onSubmit()">
   <div class="mb-3">
-    <label for="phoneNumber" class="form-label">Patient Phone Number</label>
+    <label for="phoneNumber" class="form-label">Patient Phone Number <span class="text-danger">*</span></label>
     <input 
       type="tel" 
       class="form-control" 

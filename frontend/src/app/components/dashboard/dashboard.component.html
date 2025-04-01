@@ -82,7 +82,7 @@
             </div>
             
             <div class="mb-3">
-              <label for="phoneNumber" class="form-label">Patient Phone Number</label>
+              <label for="phoneNumber" class="form-label">Patient Phone Number (Optional)</label>
               <input
                 type="tel"
                 class="form-control"
@@ -91,14 +91,11 @@
                 placeholder="+1234567890"
                 [ngClass]="{'is-invalid': createRoomForm.get('phoneNumber')?.invalid && createRoomForm.get('phoneNumber')?.touched}"
               >
-              <div class="invalid-feedback" *ngIf="createRoomForm.get('phoneNumber')?.errors?.['required'] && createRoomForm.get('phoneNumber')?.touched">
-                Phone number is required
-              </div>
               <div class="invalid-feedback" *ngIf="createRoomForm.get('phoneNumber')?.errors?.['pattern'] && createRoomForm.get('phoneNumber')?.touched">
                 Please enter a valid phone number in E.164 format (e.g., +1234567890)
               </div>
               <small class="form-text text-muted">
-                Enter phone number in E.164 format (e.g., +1234567890)
+                Enter phone number in E.164 format (e.g., +1234567890) if you want to call the patient immediately
               </small>
             </div>
             
@@ -106,10 +103,10 @@
               <button
                 type="submit"
                 class="btn btn-info text-white"
-                [disabled]="createRoomForm.invalid || loading"
+                [disabled]="createRoomForm.get('roomName')?.invalid || loading"
               >
                 <span *ngIf="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Create Room & Call Patient
+                Create Room
               </button>
             </div>
           </form>

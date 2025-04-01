@@ -141,7 +141,7 @@ app.get('/rooms', async (req, res) => {
 // Create room if it doesn't exist
 app.post('/rooms', async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, phoneNumber } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Room name is required' });
@@ -181,9 +181,17 @@ app.post('/call', async (req, res) => {
   try {
     const { room, phoneNumber, message } = req.body;
     
-    if (!room || !phoneNumber) {
-      return res.status(400).json({ error: 'Room and phone number are required' });
+    if (!room) {
+      return res.status(400).json({ error: 'Room name is required' });
     }
+    
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      return res.status(400).json({ error: 'Phone number is required to make a call' });
+    }
+    
+    // Ensure the room exists before making the call
+    await livekitAgentManager.ensureRoomExists(room);
+    
     // Use LiveKit Agent Manager to initiate the call
     // Use localhost or the PUBLIC_HOSTNAME env var instead of req.hostname for Twilio callbacks
     const publicHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
@@ -272,14 +280,39 @@ app.post('/ai-agent/:roomName', async (req, res) => {
 // ================ TWILIO WEBHOOK ROUTES ================
 
 // Handle incoming Twilio webhook for call status updates
-app.post('/twilio/call-status', (req, res) => {
+app.post('/twilio/call-status', async (req, res) => {
   try {
     const callSid = req.body.CallSid;
     const callStatus = req.body.CallStatus;
     
     console.log(`Twilio call ${callSid} status update: ${callStatus}`);
     
-    // You can add custom logic here based on the call status
+    // Handle completed or failed calls
+    if (callStatus === 'completed' || callStatus === 'failed' || callStatus === 'busy' || callStatus === 'no-answer' || callStatus === 'canceled') {
+      // Find which room is using this call SID
+      for (const roomName of livekitAgentManager.getRoomsWithActiveCalls()) {
+        const callDetails = livekitAgentManager.getCallDetails(roomName);
+        
+        if (callDetails && callDetails.sid === callSid) {
+          console.log(`Call ${callSid} in room ${roomName} has ended with status: ${callStatus}`);
+          
+          // End the call in our system
+          await livekitAgentManager.markCallEnded(roomName, callSid);
+          
+          // Broadcast status update via Socket.IO if needed
+          if (io) {
+            io.to(roomName).emit('call-status-update', {
+              roomName,
+              callSid,
+              status: callStatus,
+              active: false
+            });
+          }
+          
+          break;
+        }
+      }
+    }
     
     // Send TwiML response back to Twilio
     res.set('Content-Type', 'text/xml');

@@ -27,7 +27,7 @@ export class DashboardComponent implements OnInit {
     
     this.createRoomForm = this.fb.group({
       roomName: [randomRoomName, [Validators.required, Validators.minLength(3), Validators.pattern('^[a-zA-Z0-9-_]+$')]],
-      phoneNumber: ['', [Validators.required, Validators.pattern('^\\+?[1-9]\\d{1,14}$')]]
+      phoneNumber: ['', [Validators.pattern('^\\+?[1-9]\\d{1,14}$')]] // Made phone number optional
     });
   }
 
@@ -72,18 +72,26 @@ export class DashboardComponent implements OnInit {
     const phoneNumber = this.createRoomForm.get('phoneNumber')?.value;
     this.loading = true;
     
-    // Create a room and then automatically join it and initiate call
+    // Create a room and then automatically join it
     this.apiService.createRoom(roomName).subscribe({
       next: () => {
         // Add logging
-        console.log(`Creating room: ${roomName} and calling: ${phoneNumber}`);
+        console.log(`Creating room: ${roomName}`);
+        
+        // Only pass phoneNumber for auto-calling if one was provided
+        const navigationState: any = {};
+        
+        if (phoneNumber && phoneNumber.trim() !== '') {
+          console.log(`Will auto-call number: ${phoneNumber}`);
+          navigationState.autoCall = true;
+          navigationState.phoneNumber = phoneNumber;
+        } else {
+          console.log('No phone number provided, auto-call will be skipped');
+        }
         
         // Navigate to the call component which will automatically connect to the room
         this.router.navigate(['/call', roomName], {
-          state: {
-            autoCall: true,
-            phoneNumber: phoneNumber
-          }
+          state: navigationState
         });
         
         this.loading = false;

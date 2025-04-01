@@ -21,6 +21,9 @@ class LiveKitAgentManager {
     this.activeAgents = new Map(); // roomName -> AIAgent instance
     this.activeCalls = new Map(); // roomName -> call details
     
+    // Track call status polling (for cases where webhook isn't received)
+    this.callStatusPolling = new Map(); // callSid -> interval ID
+    
     console.log('LiveKit Agent Manager initialized');
   }
   
@@ -33,6 +36,11 @@ class LiveKitAgentManager {
    */
   async callPatient(roomName, phoneNumber, options = {}) {
     try {
+      // Validate phone number
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        throw new Error('Phone number is required to make a call');
+      }
+      
       // Check if room exists, create if not
       await this.ensureRoomExists(roomName);
       
@@ -61,6 +69,9 @@ class LiveKitAgentManager {
         participantId: callDetails.sid, // Use call SID as participant ID for direct hangup
         agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
       });
+      
+      // Start polling for call status as a fallback for webhook
+      this.startCallStatusPolling(roomName, callDetails.sid);
       
       console.log(`Outbound call initiated to ${phoneNumber} for room ${roomName}`);
       return {
@@ -91,16 +102,24 @@ class LiveKitAgentManager {
       
       console.log(`Ending call with SID: ${callDetails.sid} for room ${roomName}`);
       
-      // End the Twilio call using the stored SID
-      await twilioService.endCall(callDetails.sid);
+      let success = true;
       
-      // Remove from active calls
-      this.activeCalls.delete(roomName);
+      try {
+        // Try to end the Twilio call
+        await twilioService.endCall(callDetails.sid);
+      } catch (twilioError) {
+        console.warn(`Error ending Twilio call: ${twilioError.message}. The call may have already ended.`);
+        success = false;
+      }
       
-      console.log(`Call ended for room ${roomName}`);
+      // Always mark the call as ended in our system
+      await this.markCallEnded(roomName, callDetails.sid);
+      
+      console.log(`Call marked as ended for room ${roomName}`);
       return {
         success: true,
-        callSid: callDetails.sid
+        callSid: callDetails.sid,
+        endedByUser: true
       };
     } catch (error) {
       console.error(`Error ending call for room ${roomName}:`, error);
@@ -256,6 +275,89 @@ class LiveKitAgentManager {
       return true;
     }
     return false;
+  }
+  
+  /**
+   * Get a list of all rooms with active calls
+   * @returns {Array<string>} Array of room names that have active calls
+   */
+  getRoomsWithActiveCalls() {
+    return Array.from(this.activeCalls.keys());
+  }
+  
+  /**
+   * Get call details for a specific room
+   * @param {string} roomName - The room name
+   * @returns {Object|null} Call details or null if no active call
+   */
+  getCallDetails(roomName) {
+    return this.activeCalls.get(roomName) || null;
+  }
+  
+  /**
+   * Mark a call as ended without trying to end it via Twilio
+   * @param {string} roomName - The room name
+   * @param {string} callSid - The Twilio call SID
+   */
+  async markCallEnded(roomName, callSid) {
+    try {
+      console.log(`Marking call ${callSid} in room ${roomName} as ended`);
+      
+      // Clear any polling interval
+      if (this.callStatusPolling.has(callSid)) {
+        clearInterval(this.callStatusPolling.get(callSid));
+        this.callStatusPolling.delete(callSid);
+      }
+      
+      // Remove from active calls
+      this.activeCalls.delete(roomName);
+      
+      return {
+        success: true,
+        ended: true,
+        callSid
+      };
+    } catch (error) {
+      console.error(`Error marking call as ended for room ${roomName}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Poll for call status updates as a fallback
+   * @param {string} roomName - The room name
+   * @param {string} callSid - The Twilio call SID
+   */
+  startCallStatusPolling(roomName, callSid) {
+    // Check if already polling
+    if (this.callStatusPolling.has(callSid)) {
+      return;
+    }
+    
+    console.log(`Starting call status polling for ${callSid} in room ${roomName}`);
+    
+    // Poll every 15 seconds
+    const intervalId = setInterval(async () => {
+      try {
+        const callInfo = await twilioService.getCallInfo(callSid);
+        console.log(`Poll: Call ${callSid} status: ${callInfo.status}`);
+        
+        // If call is complete, clean up
+        if (['completed', 'busy', 'failed', 'no-answer', 'canceled'].includes(callInfo.status)) {
+          console.log(`Poll detected call ${callSid} has ended with status: ${callInfo.status}`);
+          await this.markCallEnded(roomName, callSid);
+        }
+      } catch (error) {
+        // If we can't get the call info, it probably doesn't exist anymore
+        console.error(`Error polling call status for ${callSid}:`, error);
+        if (error.status === 404) {
+          console.log(`Call ${callSid} not found, assuming it has ended`);
+          await this.markCallEnded(roomName, callSid);
+        }
+      }
+    }, 15000);
+    
+    this.callStatusPolling.set(callSid, intervalId);
   }
 }
 
