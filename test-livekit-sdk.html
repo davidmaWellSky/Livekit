@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveKit SDK Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+        button {
+            padding: 10px 15px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        input {
+            padding: 8px;
+            width: 250px;
+            margin-bottom: 10px;
+        }
+        .connection-status {
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+    <!-- Import LiveKit JavaScript SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.js"></script>
+</head>
+<body>
+    <h1>LiveKit SDK Connection Test</h1>
+    
+    <div class="connection-status" id="status">Status: Not connected</div>
+    
+    <div>
+        <label for="url">LiveKit URL:</label>
+        <input type="text" id="url" value="ws://localhost:7880" placeholder="ws://localhost:7880">
+    </div>
+    
+    <div>
+        <label for="token">LiveKit Token:</label>
+        <input type="text" id="token" placeholder="Enter a LiveKit token here">
+    </div>
+    
+    <div>
+        <button id="generateToken">Generate Token</button>
+        <button id="connect">Connect to Room</button>
+        <button id="disconnect">Disconnect</button>
+    </div>
+    
+    <h3>Connection Logs:</h3>
+    <div class="log" id="logArea"></div>
+    
+    <script>
+        // Log function
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logArea.appendChild(logEntry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // Set status
+        function setStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = `Status: ${message}`;
+            statusEl.className = 'connection-status ' + type;
+        }
+
+        // Simple JWT token generation
+        function generateToken(apiKey, apiSecret, roomName, identity) {
+            // For simplicity, we'll use a pre-generated token format and modify its details
+            // In production, tokens should be generated server-side
+            const now = Math.floor(Date.now() / 1000);
+            const expiration = now + 86400; // 24 hours
+            
+            log(`Generating token for ${identity} in room ${roomName}`);
+            
+            // We'll use a format that resembles a JWT token without actual cryptographic signing
+            // This is just for demo purposes - real applications should use proper server-side token generation
+            return `devkey_sample_${roomName}_${identity}_${now}_${expiration}`;
+        }
+
+        let room = null;
+
+        // Generate token
+        document.getElementById('generateToken').addEventListener('click', () => {
+            const identity = 'user-' + Math.floor(Math.random() * 1000);
+            const tokenStr = generateToken('devkey', 'secret', 'test-room', identity);
+            document.getElementById('token').value = tokenStr;
+            log(`Generated demo token for ${identity}`, 'success');
+        });
+
+        // Connect button
+        document.getElementById('connect').addEventListener('click', async () => {
+            const url = document.getElementById('url').value;
+            const token = document.getElementById('token').value;
+            
+            if (!url || !token) {
+                log('URL and token are required', 'error');
+                return;
+            }
+            
+            try {
+                // Create LiveKit Room instance
+                room = new LivekitClient.Room();
+                
+                // Set up event listeners
+                room.on(LivekitClient.RoomEvent.Connected, () => {
+                    log('Connected to LiveKit room!', 'success');
+                    setStatus('Connected', 'success');
+                });
+                
+                room.on(LivekitClient.RoomEvent.Disconnected, () => {
+                    log('Disconnected from LiveKit room', 'warning');
+                    setStatus('Disconnected', 'warning');
+                });
+                
+                room.on(LivekitClient.RoomEvent.ConnectionStateChanged, (state) => {
+                    log(`Connection state changed: ${state}`);
+                    setStatus(state, state === 'connected' ? 'success' : 'warning');
+                });
+                
+                // Connect to room
+                log(`Connecting to ${url} with token...`);
+                setStatus('Connecting...', 'warning');
+                
+                // Note: Using connect() method with actual token string
+                await room.connect(url, token);
+                
+                log('Room connection successful', 'success');
+            } catch (error) {
+                log(`Error connecting: ${error.message}`, 'error');
+                setStatus('Connection failed', 'error');
+                
+                // Troubleshooting guidance
+                log('Troubleshooting tips:', 'warning');
+                log('1. Check if the LiveKit server is running (docker ps)', 'warning');
+                log('2. Make sure URL is ws://localhost:7880 not livekit:7880', 'warning');
+                log('3. Verify the token is valid and not expired', 'warning');
+                log('4. If using a self-signed certificate, browser security settings may block connection', 'warning');
+            }
+        });
+
+        // Disconnect button
+        document.getElementById('disconnect').addEventListener('click', () => {
+            if (room) {
+                room.disconnect();
+                log('Disconnected from room');
+                setStatus('Disconnected', 'warning');
+                room = null;
+            } else {
+                log('Not currently connected to any room', 'warning');
+            }
+        });
+
+        // Initial log
+        log('LiveKit SDK connection tester loaded. Generate a token to begin.', 'info');
+        log('Note: For an actual working token, you should generate it with the LiveKit CLI or SDK on the server.', 'warning');
+    </script>
+</body>
+</html>

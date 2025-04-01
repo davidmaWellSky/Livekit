@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.11.0"
   }
 }

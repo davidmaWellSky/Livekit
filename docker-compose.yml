@@ -12,7 +12,7 @@ services:
   # LiveKit server
   livekit:
     image: livekit/livekit-server:latest
-    command: --dev --bind 0.0.0.0 --node-ip livekit
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
     environment:
       - "LIVEKIT_KEYS=devkey: secret"
       - "LIVEKIT_SERVER_DISABLE_CORS=true"

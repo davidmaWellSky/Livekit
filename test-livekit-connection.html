@@ -46,12 +46,18 @@
     
     <div>
         <label for="host">LiveKit Host:</label>
-        <input type="text" id="host" value="ws://localhost:7880">
+        <input type="text" id="host" value="ws://localhost:7880" placeholder="e.g., ws://localhost:7880">
+        <div class="note" style="color: #666; font-size: 0.8em; margin-top: 4px;">
+            Note: Always use localhost, not the Docker service name (livekit)
+        </div>
     </div>
     
     <div>
         <label for="token">Token:</label>
-        <input type="text" id="token" placeholder="Enter your token here" value="">
+        <input type="text" id="token" placeholder="Token will be generated" style="width: 350px;">
+        <div class="note" style="color: #666; font-size: 0.8em; margin-top: 4px;">
+            Token will be generated locally for "test-room" with default credentials
+        </div>
     </div>
     
     <div>
@@ -59,7 +65,6 @@
         <button id="connect">Connect</button>
         <button id="disconnect">Disconnect</button>
         <button id="testLocalhost">Test ws://localhost:7880</button>
-        <button id="testDocker">Test ws://livekit:7880</button>
     </div>
     
     <h3>Connection Logs:</h3>
@@ -84,16 +89,68 @@
             statusEl.className = 'connection-status ' + type;
         }
 
+        // Simple JWT token generation function using CryptoJS
+        function generateAccessToken(apiKey, apiSecret, roomName, identity) {
+            // Include necessary libraries
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js';
+            document.head.appendChild(script);
+            
+            return new Promise((resolve) => {
+                script.onload = () => {
+                    // Create JWT payload
+                    const now = Math.floor(Date.now() / 1000);
+                    const exp = now + 86400; // 24 hours
+                    
+                    const payload = {
+                        iss: apiKey,
+                        nbf: now,
+                        exp: exp,
+                        sub: identity,
+                        video: {
+                            room: roomName,
+                            roomJoin: true,
+                            canPublish: true,
+                            canSubscribe: true
+                        }
+                    };
+                    
+                    // Encode header and payload
+                    const header = { alg: 'HS256', typ: 'JWT' };
+                    const encodedHeader = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                    const encodedPayload = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                    
+                    // Create signature
+                    const signatureInput = `${encodedHeader}.${encodedPayload}`;
+                    const signature = CryptoJS.HmacSHA256(signatureInput, apiSecret);
+                    const encodedSignature = CryptoJS.enc.Base64.stringify(signature)
+                        .replace(/\+/g, '-')
+                        .replace(/\//g, '_')
+                        .replace(/=+$/, '');
+                    
+                    // Combine to form JWT
+                    resolve(`${encodedHeader}.${encodedPayload}.${encodedSignature}`);
+                };
+            });
+        }
+        
         // Get token button
         document.getElementById('getToken').addEventListener('click', async () => {
             try {
-                log('Requesting token from API...');
-                const response = await fetch('/api/token?room=test-room&identity=test-user');
-                const data = await response.json();
-                document.getElementById('token').value = data.token;
-                log('Token received successfully', 'success');
+                log('Generating token locally...');
+                
+                // Default API key and secret from docker-compose.yml
+                const apiKey = 'devkey';
+                const apiSecret = 'secret';
+                const roomName = 'test-room';
+                const identity = 'test-user-' + Math.floor(Math.random() * 1000);
+                
+                const token = await generateAccessToken(apiKey, apiSecret, roomName, identity);
+                document.getElementById('token').value = token;
+                
+                log(`Token generated for ${identity} in room ${roomName}`, 'success');
             } catch (error) {
-                log(`Error getting token: ${error}`, 'error');
+                log(`Error generating token: ${error}`, 'error');
             }
         });
 
@@ -110,8 +167,16 @@
             log(`Attempting to connect to ${host}...`);
             setStatus('Connecting...', 'warning');
 
+            // Check if host is using the Docker service name and warn the user
+            if (host.includes('livekit:')) {
+                log('WARNING: Using the Docker service name (livekit) will cause connection issues. Please use localhost instead.', 'warning');
+                setStatus('Invalid host', 'error');
+                return;
+            }
+
             try {
                 // Create a WebSocket to simulate a connection
+                log(`Connecting to ${host} with token...`);
                 const socket = new WebSocket(`${host}?access_token=${token}`);
                 
                 socket.onopen = () => {
@@ -126,10 +191,22 @@
                 socket.onerror = (error) => {
                     log(`WebSocket error: ${error}`, 'error');
                     setStatus('Connection error', 'error');
+                    
+                    // More detailed troubleshooting guidance
+                    log('Troubleshooting tips:', 'warning');
+                    log('1. Make sure you are using ws://localhost:7880 (not livekit:7880)', 'warning');
+                    log('2. Ensure LiveKit server is running (check docker ps)', 'warning');
+                    log('3. Try generating a new token by clicking "Get Token"', 'warning');
+                    log('4. Check the LiveKit server logs for any issues', 'warning');
                 };
                 
                 socket.onclose = (event) => {
-                    log(`WebSocket closed: ${event.code} - ${event.reason}`);
+                    log(`WebSocket closed: Code ${event.code} - ${event.reason || 'No reason provided'}`);
+                    
+                    if (event.code === 1006) {
+                        log('Connection was abnormally closed. This could indicate network issues or server problems.', 'error');
+                    }
+                    
                     setStatus('Disconnected', 'warning');
                 };
                 
@@ -159,11 +236,6 @@
             log('Set host to ws://localhost:7880', 'info');
         });
 
-        // Test Docker service name button
-        document.getElementById('testDocker').addEventListener('click', () => {
-            document.getElementById('host').value = 'ws://livekit:7880';
-            log('Set host to ws://livekit:7880', 'info');
-        });
 
         // Initial log
         log('LiveKit connection tester loaded. Click "Get Token" to start.');
