@@ -51,12 +51,14 @@ class LiveKitAgentManager {
         record: options.record || false
       });
       
-      // Store call details
+      // Store call details with the SID as the participant ID
+      // This allows us to hang up the call even if the participant doesn't properly join the room
       this.activeCalls.set(roomName, {
         sid: callDetails.sid,
         phoneNumber,
         status: callDetails.status,
         startTime: new Date(),
+        participantId: callDetails.sid, // Use call SID as participant ID for direct hangup
         agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
       });
       
@@ -65,6 +67,7 @@ class LiveKitAgentManager {
         callSid: callDetails.sid,
         roomName,
         status: callDetails.status,
+        callParticipantId: callDetails.sid, // Include the SID as participant ID for the frontend
         agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
       };
     } catch (error) {
@@ -86,14 +89,19 @@ class LiveKitAgentManager {
         return false;
       }
       
-      // End the Twilio call
+      console.log(`Ending call with SID: ${callDetails.sid} for room ${roomName}`);
+      
+      // End the Twilio call using the stored SID
       await twilioService.endCall(callDetails.sid);
       
       // Remove from active calls
       this.activeCalls.delete(roomName);
       
       console.log(`Call ended for room ${roomName}`);
-      return true;
+      return {
+        success: true,
+        callSid: callDetails.sid
+      };
     } catch (error) {
       console.error(`Error ending call for room ${roomName}:`, error);
       throw error;

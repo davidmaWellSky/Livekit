@@ -122,9 +122,19 @@ export class LivekitService {
 
       this.log(`Initiating call to ${phoneNumber} in room ${roomName}`);
       const response = await firstValueFrom(this.apiService.initiateCall(roomName, phoneNumber));
-      this.log(`Call initiated - SIP call ID: ${response.callId}`);
+      this.log(`Call initiated - Call SID: ${response.callSid}, Participant ID: ${response.callParticipantId || 'Unknown'}`);
+      
+      // Store Twilio call details
       this._activeCall.next(true);
-      this._callParticipantId.next(response.callId);
+      
+      // Store the call participant ID (which may be the Twilio Call SID)
+      if (response.callParticipantId) {
+        this._callParticipantId.next(response.callParticipantId);
+        this.log(`Call participant ID set to: ${response.callParticipantId}`);
+      } else if (response.callSid) {
+        this._callParticipantId.next(response.callSid);
+        this.log(`Call participant ID set to Twilio Call SID: ${response.callSid}`);
+      }
     } catch (error) {
       this.log(`Error initiating call: ${error}`);
       console.error('Failed to initiate call:', error);
@@ -136,18 +146,28 @@ export class LivekitService {
   async hangupCall(roomName: string): Promise<void> {
     try {
       const participantId = this._callParticipantId.value;
-      if (!participantId) {
-        throw new Error('No active call participant ID');
+      
+      // We may or may not have a participant ID, but we can still try to hang up
+      // by room name only since our backend now stores calls by room name
+      if (participantId) {
+        this.log(`Hanging up call with participant ID: ${participantId}`);
+        await firstValueFrom(this.apiService.hangupCall(roomName, participantId));
+      } else {
+        this.log(`Hanging up call in room ${roomName} without participant ID`);
+        await firstValueFrom(this.apiService.hangupCall(roomName, ""));
       }
-
-      this.log(`Hanging up call with participant ID: ${participantId}`);
-      await firstValueFrom(this.apiService.hangupCall(roomName, participantId));
-      this.log('Call successfully terminated');
+      
+      this.log('Call hangup request sent');
       this._activeCall.next(false);
       this._callParticipantId.next(null);
     } catch (error) {
       this.log(`Error hanging up call: ${error}`);
       console.error('Failed to hang up call:', error);
+      
+      // Even if there's an error, reset the call state so the UI doesn't get stuck
+      this._activeCall.next(false);
+      this._callParticipantId.next(null);
+      
       throw error;
     }
   }

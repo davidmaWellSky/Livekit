@@ -205,21 +205,21 @@ app.post('/call', async (req, res) => {
 // End active call
 app.post('/hangup', async (req, res) => {
   try {
-    const { room } = req.body;
+    const { room, participantId } = req.body;
     
     if (!room) {
       return res.status(400).json({ error: 'Room name is required' });
     }
     
-    // End the call
-    const success = await livekitAgentManager.endCall(room);
+    // End the call - we no longer need the participantId since we're tracking by room
+    const result = await livekitAgentManager.endCall(room);
     
     // Also remove the AI agent when call ends
-    if (success) {
+    if (result && result.success) {
       livekitAgentManager.removeAgentFromRoom(room);
     }
     
-    res.json({ success });
+    res.json(result || { success: false });
   } catch (error) {
     console.error('Hangup error:', error);
     res.status(500).json({ error: 'Failed to hang up call', details: error.message });
