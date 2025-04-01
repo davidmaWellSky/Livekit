@@ -56,6 +56,9 @@ class DeepgramService {
    */
   async speechToText(audioData, options = {}) {
     try {
+      // Log audio data details for debugging
+      console.log(`Received audio data: ${audioData.length} bytes, mimetype: ${options.mimetype || 'unknown'}`);
+      
       // If we're in mock mode, return a mock transcription
       if (this.useMockResponses) {
         const randomIndex = Math.floor(Math.random() * this.mockTranscriptions.length);
@@ -91,6 +94,17 @@ class DeepgramService {
         }
       });
       
+      // Special handling for telephony audio if detected
+      if (options.source === 'phone' || options.source === 'sip' ||
+          (options.mimetype && options.mimetype.includes('audio/x-')) ||
+          (options.mimetype && options.mimetype.includes('mulaw'))) {
+        // Telephony audio detected
+        console.log('Detected telephony audio source, adjusting transcription parameters');
+        queryParams.append('detect_language', 'true');
+        queryParams.append('channels', '1');
+        queryParams.append('sample_rate', '8000'); // Common for telephony
+      }
+      
       console.log(`Sending transcription request to: ${this.deepgramUrl}/v1/listen`);
       
       // Send audio data to port-forwarded Deepgram instance
@@ -101,7 +115,7 @@ class DeepgramService {
           'Content-Type': options.mimetype || 'audio/webm'
         },
         body: audioData,
-        timeout: 10000 // 10 second timeout
+        timeout: 15000 // Extended timeout for telephony audio
       });
       
       if (!response.ok) {
@@ -109,7 +123,10 @@ class DeepgramService {
       }
       
       const result = await response.json();
+      console.log('Deepgram response received:', JSON.stringify(result, null, 2));
+      
       const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+      console.log(`Transcription result: "${transcript}"`);
       return transcript;
     } catch (error) {
       console.error('Error transcribing speech:', error);

@@ -234,6 +234,65 @@ app.post('/hangup', async (req, res) => {
   }
 });
 
+// Get the status of an active call in a room
+app.get('/call-status/:room', async (req, res) => {
+  try {
+    const { room } = req.params;
+    
+    if (!room) {
+      return res.status(400).json({ error: 'Room name is required' });
+    }
+    
+    // Get active call details from LiveKit agent manager
+    const callDetails = livekitAgentManager.getCallDetails(room);
+    
+    if (!callDetails) {
+      return res.json({
+        active: false,
+        status: 'no-call',
+        message: 'No active call found for this room'
+      });
+    }
+    
+    // If we have call details, we can get more info from Twilio if needed
+    let twilioStatus = callDetails.status;
+    
+    // If the call is more than a few seconds old, check current status from Twilio
+    const callAge = (new Date() - new Date(callDetails.startTime)) / 1000;
+    if (callAge > 5 && callDetails.sid) {
+      try {
+        const twilioCallInfo = await twilioService.getCallInfo(callDetails.sid);
+        twilioStatus = twilioCallInfo.status;
+        
+        // Update our status
+        callDetails.status = twilioStatus;
+        
+        // Mark call as connected if answered
+        if (!callDetails.connected &&
+            (twilioStatus === 'in-progress' || twilioStatus === 'answered')) {
+          callDetails.connected = true;
+          console.log(`Call ${callDetails.sid} marked as connected in room ${room}`);
+        }
+      } catch (twilioError) {
+        console.log(`Error getting Twilio status for call ${callDetails.sid}: ${twilioError.message}`);
+      }
+    }
+    
+    res.json({
+      active: callDetails.connected || twilioStatus === 'in-progress' || twilioStatus === 'ringing',
+      status: twilioStatus,
+      callSid: callDetails.sid,
+      phoneNumber: callDetails.phoneNumber,
+      startTime: callDetails.startTime,
+      participantId: callDetails.participantId,
+      connected: callDetails.connected || false
+    });
+  } catch (error) {
+    console.error('Call status error:', error);
+    res.status(500).json({ error: 'Failed to get call status', details: error.message });
+  }
+});
+
 // AI Agent endpoints
 
 // Get AI agent status
@@ -434,11 +493,25 @@ app.post('/agent/process-audio', async (req, res) => {
     const audioData = req.body;
     const mimetype = req.headers['content-type'] || 'audio/webm';
     
+    // Log audio processing attempt for debugging
+    console.log(`Processing audio for room ${roomName}: ${audioData.length} bytes, type: ${mimetype}`);
+    
+    // Determine if this is likely telephony audio
+    const isTelephonyAudio = mimetype.includes('mulaw') ||
+                          mimetype.includes('pcm') ||
+                          mimetype.includes('x-') ||
+                          req.query.source === 'sip' ||
+                          req.query.source === 'phone';
+    
     // Process audio with AI agent
     const response = await livekitAgentManager.processPatientAudio(roomName, audioData, {
       mimetype,
-      patientName: req.query.patientName
+      patientName: req.query.patientName,
+      source: isTelephonyAudio ? 'phone' : 'web',
+      telephony: isTelephonyAudio
     });
+    
+    console.log(`Agent response for room ${roomName}: "${response.text}"`);
     
     if (response.audio) {
       res.set('Content-Type', 'audio/wav');

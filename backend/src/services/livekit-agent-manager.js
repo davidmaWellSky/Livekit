@@ -67,7 +67,9 @@ class LiveKitAgentManager {
         status: callDetails.status,
         startTime: new Date(),
         participantId: callDetails.sid, // Use call SID as participant ID for direct hangup
-        agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id
+        agentId: this.activeAgents.get(roomName)?.agent.getIdentity().id,
+        connected: false, // Track if the participant has successfully connected
+        lastStatusUpdate: new Date()
       });
       
       // Start polling for call status as a fallback for webhook
@@ -309,6 +311,14 @@ class LiveKitAgentManager {
         this.callStatusPolling.delete(callSid);
       }
       
+      // Also check for any alternate polling intervals that might have been set up
+      Array.from(this.callStatusPolling.entries()).forEach(([key, value]) => {
+        if (key.includes(roomName)) {
+          clearInterval(value);
+          this.callStatusPolling.delete(key);
+        }
+      });
+      
       // Remove from active calls
       this.activeCalls.delete(roomName);
       
@@ -336,16 +346,65 @@ class LiveKitAgentManager {
     
     console.log(`Starting call status polling for ${callSid} in room ${roomName}`);
     
-    // Poll every 15 seconds
+    // Poll more frequently initially to catch quick transitions, then slower
+    let pollCount = 0;
     const intervalId = setInterval(async () => {
       try {
-        const callInfo = await twilioService.getCallInfo(callSid);
-        console.log(`Poll: Call ${callSid} status: ${callInfo.status}`);
+        pollCount++;
         
-        // If call is complete, clean up
+        // Get current call info from Twilio
+        const callInfo = await twilioService.getCallInfo(callSid);
+        console.log(`Poll ${pollCount}: Call ${callSid} status: ${callInfo.status} in room ${roomName}`);
+        
+        // Get our stored call info
+        const storedCallInfo = this.activeCalls.get(roomName);
+        
+        // If we have stored call info, update the status
+        if (storedCallInfo) {
+          // Update the stored call status
+          storedCallInfo.status = callInfo.status;
+          storedCallInfo.lastStatusUpdate = new Date();
+          
+          // If call became 'in-progress', update our connected flag
+          if (callInfo.status === 'in-progress' && !storedCallInfo.connected) {
+            console.log(`Call ${callSid} is now in-progress in room ${roomName}`);
+            storedCallInfo.connected = true;
+          }
+          
+          // Update the stored call info
+          this.activeCalls.set(roomName, storedCallInfo);
+        }
+        
+        // Check if call is complete for any termination statuses
         if (['completed', 'busy', 'failed', 'no-answer', 'canceled'].includes(callInfo.status)) {
           console.log(`Poll detected call ${callSid} has ended with status: ${callInfo.status}`);
           await this.markCallEnded(roomName, callSid);
+        }
+        
+        // After 10 polls, increase the polling interval to 30 seconds
+        if (pollCount === 10) {
+          console.log(`Reducing polling frequency for call ${callSid} after 10 polls`);
+          clearInterval(intervalId);
+          
+          const newIntervalId = setInterval(async () => {
+            try {
+              const laterCallInfo = await twilioService.getCallInfo(callSid);
+              console.log(`Extended poll: Call ${callSid} status: ${laterCallInfo.status}`);
+              
+              if (['completed', 'busy', 'failed', 'no-answer', 'canceled'].includes(laterCallInfo.status)) {
+                console.log(`Extended poll detected call ${callSid} has ended`);
+                await this.markCallEnded(roomName, callSid);
+              }
+            } catch (error) {
+              console.error(`Error in extended polling for ${callSid}:`, error);
+              if (error.status === 404) {
+                console.log(`Call ${callSid} not found in extended poll, ending`);
+                await this.markCallEnded(roomName, callSid);
+              }
+            }
+          }, 30000); // Every 30 seconds
+          
+          this.callStatusPolling.set(`${callSid}-extended`, newIntervalId);
         }
       } catch (error) {
         // If we can't get the call info, it probably doesn't exist anymore
@@ -355,7 +414,7 @@ class LiveKitAgentManager {
           await this.markCallEnded(roomName, callSid);
         }
       }
-    }, 15000);
+    }, 5000); // Every 5 seconds initially
     
     this.callStatusPolling.set(callSid, intervalId);
   }

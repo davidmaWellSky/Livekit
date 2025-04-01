@@ -1,3 +1,52 @@
+.participants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.participant-tile {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.participant-tile:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sip-participant {
+  border-left: 4px solid #17a2b8;
+  background-color: #e3f2fd;
+}
+
+.audio-level-indicator {
+  flex-grow: 1;
+  height: 8px;
+  background-color: #dee2e6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.audio-level-indicator .level {
+  height: 100%;
+  background-color: #28a745;
+  transition: width 0.1s ease;
+}
+
+.sip-participant .audio-level-indicator .level {
+  background-color: #17a2b8;
+}
+
+.call-logs-container {
+  border-top: 1px solid #dee2e6;
+}
+
+.call-logs-container .list-group-item {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
 /* Call component styling */
 .call-page {
   min-height: calc(100vh - 140px);

@@ -49,10 +49,33 @@
 
             <!-- Participants list -->
             <div *ngIf="participants.length > 0" class="participants-grid">
-              <div *ngFor="let participant of participants" class="participant-tile p-3 mb-3">
+              <div *ngFor="let participant of participants" class="participant-tile p-3 mb-3"
+                [ngClass]="{
+                  'sip-participant': isSipParticipant(participant),
+                  'border-info': isSipParticipant(participant)
+                }">
+                <!-- Enhanced participant information display -->
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                  <h6 class="mb-0">{{ participant.identity }}</h6>
-                  <span class="badge" [ngClass]="participant.isSpeaking === true ? 'bg-success' : 'bg-secondary'">
+                  <h6 class="mb-0">
+                    <!-- Show phone icon for SIP participants -->
+                    <i *ngIf="isSipParticipant(participant)" class="bi bi-telephone-fill text-info me-1"></i>
+                    
+                    <!-- Show user icon for regular participants -->
+                    <i *ngIf="!isSipParticipant(participant)" class="bi bi-person-fill me-1"></i>
+                    
+                    <!-- Display participant identity with special formatting for SIP/phone participants -->
+                    <span *ngIf="isSipParticipant(participant) && participant.identity.includes('+')">
+                      {{ formatPhoneNumber(participant.identity) }}
+                    </span>
+                    <span *ngIf="isSipParticipant(participant) && !participant.identity.includes('+')">
+                      Phone Caller
+                    </span>
+                    <span *ngIf="!isSipParticipant(participant)">
+                      {{ participant.identity }}
+                    </span>
+                  </h6>
+                  <span class="badge"
+                    [ngClass]="participant.isSpeaking === true ? 'bg-success' : 'bg-secondary'">
                     {{ participant.isSpeaking === true ? 'Speaking' : 'Silent' }}
                   </span>
                 </div>
@@ -60,21 +83,43 @@
                 <!-- Audio status indicator -->
                 <div class="d-flex align-items-center">
                   <span class="me-2">
-                    <i class="bi" [ngClass]="(participant.audioTracks && participant.audioTracks.size > 0) ? 'bi-mic-fill text-success' : 'bi-mic-mute-fill text-danger'"></i>
+                    <i class="bi"
+                      [ngClass]="(participant.audioTracks && participant.audioTracks.size > 0) ? 'bi-mic-fill text-success' : 'bi-mic-mute-fill text-danger'"></i>
                   </span>
                   <span class="audio-level-indicator">
                     <div class="level" [style.width.%]="(participant.audioLevel || 0) * 100"></div>
                   </span>
                 </div>
+                
+                <!-- Connection quality indicator for SIP calls -->
+                <div *ngIf="isSipParticipant(participant)" class="mt-2 text-center">
+                  <small class="text-info">SIP/Phone Connection</small>
+                  <div class="progress mt-1" style="height: 6px;">
+                    <div class="progress-bar bg-info" role="progressbar" [style.width.%]="80"></div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Call status -->
+            <!-- Call status with more details -->
             <div *ngIf="activeCall" class="alert alert-info mt-3">
               <div class="d-flex align-items-center">
                 <span class="spinner-grow spinner-grow-sm me-2" role="status"></span>
                 <span>Call in progress</span>
               </div>
+              <div class="mt-2 small">
+                <p class="mb-1"><strong>Participants:</strong> {{ participants.length }}</p>
+                <p class="mb-0"><strong>Call Duration:</strong> {{ getCallDuration() }}</p>
+              </div>
+            </div>
+            
+            <!-- No call but connected to room -->
+            <div *ngIf="!activeCall && connected" class="alert alert-secondary mt-3">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-telephone-x me-2"></i>
+                <span>No active call</span>
+              </div>
+              <p class="mt-2 mb-0 small">Use the call panel to initiate a new call.</p>
             </div>
           </div>
         </div>

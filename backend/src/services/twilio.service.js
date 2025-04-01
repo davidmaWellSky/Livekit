@@ -98,17 +98,22 @@ class TwilioService {
     
     // If we have SIP info, try to connect via SIP to LiveKit
     if (hasSipInfo) {
+      console.log('Generating TwiML with SIP connection to LiveKit room:', roomName);
       return `
         <Response>
           <Say voice="alice">${message}</Say>
           <Pause length="1"/>
           <Say voice="alice">Connecting you to your appointment scheduling assistant now.</Say>
-          <Dial>
+          <Dial timeout="60" timeLimit="1800" ringTone="us" record="record-from-answer">
             <Sip username="${process.env.TWILIO_CREDENTIAL_LIST_USERNAME}"
-                 password="${process.env.TWILIO_CREDENTIAL_LIST_PASSWORD}">
+                 password="${process.env.TWILIO_CREDENTIAL_LIST_PASSWORD}"
+                 statusCallbackEvent="initiated ringing answered completed"
+                 mediaStreamingEnabled="true"
+                 mediaStreamingTrack="both">
                 sip:${roomName}@${process.env.TWILIO_TERMINATION_URI}
             </Sip>
           </Dial>
+          <Say voice="alice">Thank you for using our service. Goodbye.</Say>
         </Response>
       `;
     }
@@ -123,6 +128,8 @@ class TwilioService {
           Please try again later or call our main office directly. Thank you for your patience.
         </Say>
         <Pause length="1"/>
+        <Record timeout="5" maxLength="60" playBeep="false" />
+        <Say voice="alice">Thank you for your message. Goodbye.</Say>
         <Hangup />
       </Response>
     `;

@@ -21,6 +21,14 @@ sip:
   
   # HTTP management API
   http_addr: 0.0.0.0:5080
+  
+  # Audio configuration - explicitly enable bidirectional audio
+  audio:
+    enabled: true
+    publish: true     # Send audio to SIP participants
+    subscribe: true   # Receive audio from SIP participants
+    sample_rate: 8000 # Standard telephony sample rate
+    channels: 1       # Mono audio for telephony
 
   # Outbound SIP settings
   outbound:
@@ -35,3 +43,5 @@ trunks:
     domain: sip.twilio.com
     # Twilio SIP domain typically follows this format
     uri: "sip:${TWILIO_TRUNK_SID}@sip.twilio.com"
+    # Enable debugging for this trunk
+    debug: true

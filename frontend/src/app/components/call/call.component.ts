@@ -22,6 +22,7 @@ export class CallComponent implements OnInit, OnDestroy {
   callLogs: string[] = []; // Add call logs array
   connectionState: string = 'disconnected';
   environment = environment; // Expose environment to the template
+  callStartTime: Date | null = null;
   
   private participantsSubscription?: Subscription;
   private connectedSubscription?: Subscription;
@@ -96,6 +97,21 @@ export class CallComponent implements OnInit, OnDestroy {
     
     this.activeCallSubscription = this.livekitService.activeCall$.subscribe(
       activeCall => {
+        // If transitioning from inactive to active, record the start time
+        if (!this.activeCall && activeCall) {
+          this.callStartTime = new Date();
+          this.addLog(`Call started at ${this.callStartTime.toLocaleTimeString()}`);
+        }
+        
+        // If transitioning from active to inactive, clear the start time
+        if (this.activeCall && !activeCall) {
+          if (this.callStartTime) {
+            const duration = this.getCallDurationSeconds();
+            this.addLog(`Call ended. Duration: ${this.formatDuration(duration)}`);
+          }
+          this.callStartTime = null;
+        }
+        
         this.activeCall = activeCall;
         if (activeCall) {
           this.showPatientForm = false;
@@ -181,6 +197,83 @@ export class CallComponent implements OnInit, OnDestroy {
     }
     
     console.log(`[Call Log] ${message}`);
+  }
+  
+  /**
+   * Checks if a participant is likely a SIP participant (i.e., phone caller)
+   */
+  isSipParticipant(participant: Participant): boolean {
+    if (!participant || !participant.identity) return false;
+    
+    return participant.identity.includes('sip:') ||
+           participant.identity.includes('phone:') ||
+           participant.identity.includes('twilio') ||
+           participant.identity.includes('+') ||
+           /^\d+$/.test(participant.identity);
+  }
+  
+  /**
+   * Format a phone number for display
+   */
+  formatPhoneNumber(phoneIdentity: string): string {
+    // Extract the actual phone number if it's in a complex format
+    let phoneNumber = phoneIdentity;
+    
+    // Try to extract the phone number from common formats
+    const phoneMatch = phoneIdentity.match(/\+?[0-9]{10,15}/);
+    if (phoneMatch) {
+      phoneNumber = phoneMatch[0];
+    }
+    
+    // Format +1XXXXXXXXXX to +1 (XXX) XXX-XXXX
+    if (phoneNumber.startsWith('+1') && phoneNumber.length === 12) {
+      return `+1 (${phoneNumber.substr(2, 3)}) ${phoneNumber.substr(5, 3)}-${phoneNumber.substr(8, 4)}`;
+    }
+    
+    // Format international numbers
+    if (phoneNumber.startsWith('+') && phoneNumber.length > 8) {
+      const countryCode = phoneNumber.substr(0, 3);
+      const restOfNumber = phoneNumber.substr(3);
+      return `${countryCode} ${restOfNumber}`;
+    }
+    
+    // Just return the original if no formatting applied
+    return phoneNumber;
+  }
+  
+  /**
+   * Calculate and return the call duration in seconds
+   */
+  getCallDurationSeconds(): number {
+    if (!this.callStartTime) return 0;
+    return Math.floor((new Date().getTime() - this.callStartTime.getTime()) / 1000);
+  }
+  
+  /**
+   * Format the call duration for display
+   */
+  getCallDuration(): string {
+    const seconds = this.getCallDurationSeconds();
+    return this.formatDuration(seconds);
+  }
+  
+  /**
+   * Format seconds into a readable duration string
+   */
+  formatDuration(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (minutes < 60) {
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+    
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
   }
 
   ngOnDestroy(): void {

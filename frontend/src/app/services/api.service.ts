@@ -33,4 +33,9 @@ export class ApiService {
   hangupCall(room: string, participantId: string): Observable<any> {
     return this.http.post(`${this.baseUrl}/hangup`, { room, participantId });
   }
+
+  // Get call status for a room
+  getActiveCall(room: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/call-status/${room}`);
+  }
 }
