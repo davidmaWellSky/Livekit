@@ -35,13 +35,38 @@ sip:
     enabled: true
     from: "LiveKit SIP <sip:livekit@livekit-sip.local>"
     default_trunk_id: local-trunk
+# ASR (Automatic Speech Recognition) configuration
+asr:
+  provider: deepgram
+  enabled: true
+  language: en-US
+
+  # TTS (Text-to-Speech) configuration
+  tts:
+    provider: deepgram
+    enabled: true
+    voice: female-1
+    language: en-US
+
+# Deepgram configuration for ASR/TTS
+deepgram:
+  url: http://host.docker.internal:9012  # Port-forwarding to stage Kubernetes cluster
+  api_key: null
+  model: general
+  tier: enhanced
+  timeout_ms: 30000
+  fallback_provider: null
+  retry_count: 3
+  retry_delay_ms: 1000
 
 # Trunk configurations
 trunks:
   - id: local-trunk
     type: generic
-    domain: sip.twilio.com
-    # Twilio SIP domain typically follows this format
-    uri: "sip:${TWILIO_TRUNK_SID}@sip.twilio.com"
+    domain: aiagenticlivekit.pstn.twilio.com
+    # Updated to match the actual termination URI
+    uri: "sip:${TWILIO_TRUNK_SID}@aiagenticlivekit.pstn.twilio.com"
     # Enable debugging for this trunk
     debug: true
+    # Add realm to match the configured domain
+    realm: aiagenticlivekit.pstn.twilio.com

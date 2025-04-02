@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const http = require('http');
+const expressWs = require('express-ws');
 const socketIo = require('socket.io');
 const { AccessToken, RoomServiceClient, SipParticipant } = require('livekit-server-sdk');
 const { v4: uuidv4 } = require('uuid');
@@ -13,6 +14,10 @@ const deepgramService = require('./services/deepgram.service');
 
 const app = express();
 const server = http.createServer(app);
+
+// Initialize WebSocket support
+expressWs(app, server);
+
 const io = socketIo(server, {
   cors: {
     origin: '*',
@@ -429,8 +434,308 @@ app.post('/twilio/connect-to-room', (req, res) => {
     `);
   }
 });
+// Handle Twilio SIP status updates - Enhanced with detailed logging
+app.post('/twilio/sip-status', (req, res) => {
+  try {
+    const sipCallId = req.body.CallSid;
+    const sipStatus = req.body.SipStatus || req.body.CallStatus;
+    const callLegId = req.body.CallLegSid;
+    const errorCode = req.body.ErrorCode;
+    const errorMessage = req.body.ErrorMessage;
+    
+    // Log all request parameters for debugging
+    console.log(`Twilio SIP ${sipCallId} status update: ${sipStatus}`, {
+      callSid: sipCallId,
+      status: sipStatus,
+      callLegId,
+      timestamp: new Date().toISOString(),
+      allParams: req.body,
+      hasError: !!errorCode
+    });
+    
+    // Log detailed error information if present
+    if (errorCode) {
+      console.error(`[CRITICAL] SIP ERROR: Code ${errorCode} - ${errorMessage || 'No message'}`, {
+        errorCode,
+        errorMessage,
+        callSid: sipCallId,
+        status: sipStatus
+      });
+      
+      // Try to find which room this call belongs to
+      for (const roomName of livekitAgentManager.getRoomsWithActiveCalls()) {
+        const callDetails = livekitAgentManager.getCallDetails(roomName);
+        if (callDetails && callDetails.sid === sipCallId) {
+          console.error(`SIP error occurred in room ${roomName}`);
+          // Optionally notify clients via socket.io
+          if (io) {
+            io.to(roomName).emit('call-error', {
+              roomName,
+              callSid: sipCallId,
+              errorCode,
+              errorMessage: errorMessage || 'Unknown error',
+              status: sipStatus
+            });
+          }
+          break;
+        }
+      }
+    }
+    
+    // Set proper content type for TwiML response
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response></Response>');
+  } catch (error) {
+    console.error('Error handling SIP status webhook:', error);
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response></Response>');
+  }
+});
+
+// Handle recording status updates
+app.post('/twilio/recording-status', (req, res) => {
+  try {
+    const recordingStatus = req.body.RecordingStatus;
+    const recordingUrl = req.body.RecordingUrl;
+    const callSid = req.body.CallSid;
+    
+    console.log(`Recording status update for call ${callSid}: ${recordingStatus}`, {
+      url: recordingUrl,
+      duration: req.body.RecordingDuration,
+      allParams: req.body
+    });
+    
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response></Response>');
+  } catch (error) {
+    console.error('Error handling recording status webhook:', error);
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response></Response>');
+  }
+});
+
+// Handle Dial action status with enhanced error detection
+app.post('/twilio/dial-status', (req, res) => {
+  try {
+    const callSid = req.body.CallSid;
+    const dialStatus = req.body.DialStatus;
+    const dialCallSid = req.body.DialCallSid;
+    const errorCode = req.body.ErrorCode;
+    const errorMessage = req.body.ErrorMessage;
+    
+    // Create a detailed log of dial status
+    const logData = {
+      callSid,
+      dialStatus,
+      dialCallSid,
+      timestamp: new Date().toISOString(),
+      allParams: req.body
+    };
+    
+    // If we have error information, add it to the log
+    if (errorCode) {
+      logData.errorCode = errorCode;
+      logData.errorMessage = errorMessage;
+      console.error(`[CRITICAL] Dial ERROR: Code ${errorCode} - ${errorMessage || 'No message'}`, logData);
+    } else {
+      console.log(`Twilio Dial ${callSid} completed with status: ${dialStatus}`, logData);
+    }
+    
+    // Send appropriate TwiML response based on dial status
+    res.set('Content-Type', 'text/xml');
+    
+    if (dialStatus === 'completed' || dialStatus === 'answered') {
+      res.send('<Response><Say>The call has completed. Thank you for using our service.</Say></Response>');
+    } else {
+      // If we have error details, include them in the response
+      if (errorCode) {
+        res.send(`<Response><Say>We encountered an error with code ${errorCode}. ${errorMessage || 'Please try again later.'}</Say></Response>`);
+      } else {
+        res.send('<Response><Say>We were unable to complete your call. Please try again later.</Say></Response>');
+      }
+    }
+  } catch (error) {
+    console.error('Error handling dial status webhook:', error);
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response><Say>An error occurred. Please try again later.</Say></Response>');
+  }
+});
+
+// Call diagnostic endpoint to check SIP configuration
+app.get('/diagnostics/sip-config', (req, res) => {
+  const config = {
+    hasSipInfo: !!(process.env.TWILIO_TRUNK_SID &&
+                 process.env.TWILIO_TERMINATION_URI &&
+                 process.env.TWILIO_CREDENTIAL_LIST_USERNAME &&
+                 process.env.TWILIO_CREDENTIAL_LIST_PASSWORD),
+    trunkSid: process.env.TWILIO_TRUNK_SID ? 'Set' : 'Not Set',
+    terminationUri: process.env.TWILIO_TERMINATION_URI,
+    publicHostname: process.env.PUBLIC_HOSTNAME || 'localhost',
+    deepgramUrl: process.env.DEEPGRAM_URL || 'http://localhost:9012',
+    port: PORT
+  };
+  
+  res.json(config);
+});
+
+// Handle Twilio media streaming with enhanced error handling
+app.ws('/twilio/media', (ws, req) => {
+  console.log('Twilio media stream connected');
+  
+  const roomName = req.query.roomName;
+  if (!roomName) {
+    console.error('No room name provided for media stream');
+    try {
+      ws.send(JSON.stringify({ error: 'Missing roomName parameter', fatal: true }));
+    } catch (e) { /* Ignore send errors */ }
+    ws.close();
+    return;
+  }
+  
+  // Track data for debugging
+  let packetsReceived = 0;
+  let audioChunks = [];
+  let processingTimeout = null;
+  let lastProcessedTime = 0;
+  let errorCount = 0;
+  const connectionStartTime = new Date();
+  
+  // Log connection details
+  console.log(`WebSocket media connection established for room ${roomName}`, {
+    timestamp: connectionStartTime.toISOString(),
+    query: req.query,
+    headers: req.headers,
+    connectionId: ws._socket?.remoteAddress || 'unknown'
+  });
+  
+  // Get the agent for this room
+  const agentData = livekitAgentManager.getAgentForRoom(roomName);
+  if (!agentData) {
+    console.error(`No agent found for room ${roomName} in media stream handler`);
+    try {
+      ws.send(JSON.stringify({
+        error: 'No agent found for this room',
+        fatal: false,
+        message: 'Agent not found, but connection will remain open'
+      }));
+    } catch (e) { /* Ignore send errors */ }
+    // Don't close the connection yet, as the agent might be created later
+    
+    // Try to create an agent for this room asynchronously
+    livekitAgentManager.createAgentForRoom(roomName)
+      .then(agent => {
+        console.log(`Created new agent for room ${roomName} after WebSocket connection`);
+        try {
+          ws.send(JSON.stringify({
+            message: 'Agent created successfully',
+            agentId: agent.agentId
+          }));
+        } catch (e) { /* Ignore send errors */ }
+      })
+      .catch(err => {
+        console.error(`Failed to create agent for room ${roomName} after WebSocket connection:`, err);
+      });
+  } else {
+    console.log(`Found agent for room ${roomName}: ${agentData.agent.getIdentity().id}`);
+  }
+  
+  // Function to handle errors during audio processing
+  const handleProcessingError = (error) => {
+    errorCount++;
+    console.error(`Error processing audio for room ${roomName} (error #${errorCount}):`, error);
+    
+    // Send error back to client
+    try {
+      ws.send(JSON.stringify({
+        error: error.message || 'Unknown error processing audio',
+        fatal: errorCount > 5, // Consider fatal after multiple errors
+        errorCount
+      }));
+    } catch (e) { /* Ignore send errors */ }
+    
+    // If too many errors, close the connection
+    if (errorCount > 10) {
+      console.error(`Too many errors (${errorCount}) for room ${roomName}, closing WebSocket`);
+      try {
+        ws.close();
+      } catch (e) { /* Ignore close errors */ }
+    }
+  };
+  
+  ws.on('message', async (data) => {
+    try {
+      packetsReceived++;
+      
+      // Add data to audio chunks
+      audioChunks.push(data);
+      
+      // Log occasional status updates
+      if (packetsReceived % 50 === 0) {
+        console.log(`Received ${packetsReceived} media packets for room ${roomName}, buffer size: ${audioChunks.length}`);
+      }
+      
+      // Process audio every 2 seconds to capture enough speech
+      const now = Date.now();
+      if (!processingTimeout && (now - lastProcessedTime) > 2000 && audioChunks.length > 0) {
+        processingTimeout = setTimeout(async () => {
+          try {
+            // Clear timeout and reset for next processing
+            processingTimeout = null;
+            lastProcessedTime = Date.now();
+            
+            // Combine audio chunks into a single buffer
+            const combinedAudio = Buffer.concat(audioChunks);
+            audioChunks = []; // Clear buffer after processing
+            
+            console.log(`Processing ${combinedAudio.length} bytes of audio for room ${roomName}`);
+            
+            // Get the agent for this room (check again in case it was created after connection)
+            const currentAgentData = livekitAgentManager.getAgentForRoom(roomName);
+            if (!currentAgentData) {
+              console.error(`No agent found for room ${roomName} during audio processing`);
+              return;
+            }
+            
+            // Process the audio with the agent - explicitly set telephony options
+            const response = await currentAgentData.agent.processAudio(combinedAudio, {
+              mimetype: 'audio/x-mulaw',  // Common format for Twilio telephony
+              source: 'phone',
+              telephony: true,
+              sampleRate: 8000,  // Standard telephony sample rate
+              patientName: 'Patient'
+            });
+            
+            console.log(`Agent response for media stream in room ${roomName}: "${response.text}"`);
+            
+            // Send text response back to websocket client (for debugging)
+            ws.send(JSON.stringify({
+              text: response.text,
+              timestamp: new Date().toISOString()
+            }));
+            
+          } catch (error) {
+            handleProcessingError(error);
+          }
+        }, 500); // Short delay to collect any additional packets
+      }
+    } catch (error) {
+      handleProcessingError(error);
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log(`Twilio media stream for room ${roomName} closed after ${packetsReceived} packets`);
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+    }
+  });
+});
 
 // ================ DEEPGRAM AUDIO PROCESSING ================
+
+// ================ DEEPGRAM INTEGRATION (VIA LIVEKIT) ================
+// NOTE: These endpoints are maintained for backward compatibility during transition.
+// In the new architecture, LiveKit handles the Deepgram integration directly.
 
 // Handle audio for speech-to-text (batch processing)
 app.post('/audio/transcribe', async (req, res) => {
@@ -442,6 +747,11 @@ app.post('/audio/transcribe', async (req, res) => {
     const audioData = req.body;
     const mimetype = req.headers['content-type'] || 'audio/webm';
     const language = req.query.language || 'en-US';
+    
+    // Note: In the new architecture, transcription happens through LiveKit's integration
+    // with Deepgram. This endpoint is kept for backward compatibility.
+    console.log('DEPRECATED: Using direct Deepgram integration. ' +
+                'Speech-to-text should be handled by LiveKit\'s Deepgram integration.');
     
     const transcript = await deepgramService.speechToText(audioData, {
       mimetype,
@@ -463,6 +773,11 @@ app.post('/audio/synthesize', async (req, res) => {
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
+    
+    // Note: In the new architecture, text-to-speech happens through LiveKit's integration
+    // with Deepgram. This endpoint is kept for backward compatibility.
+    console.log('DEPRECATED: Using direct Deepgram integration. ' +
+                'Text-to-speech should be handled by LiveKit\'s Deepgram integration.');
     
     const audioData = await deepgramService.textToSpeech(text, {
       voice: voice || 'female-1',

@@ -1,7 +1,8 @@
 const { RoomServiceClient, Room, AccessToken } = require('livekit-server-sdk');
 const AIAgent = require('./ai-agent');
-const deepgramService = require('./deepgram.service');
 const twilioService = require('./twilio.service');
+// Import deepgramService for backward compatibility during transition
+const deepgramService = require('./deepgram.service');
 
 class LiveKitAgentManager {
   constructor() {
@@ -252,6 +253,13 @@ class LiveKitAgentManager {
         throw new Error(`No AI agent found for room ${roomName}`);
       }
       
+      // NOTE: In the refactored architecture, LiveKit handles the Deepgram integration
+      // for speech-to-text and text-to-speech. This method is kept for backward compatibility
+      // during the transition but should eventually be deprecated in favor of letting
+      // LiveKit handle the audio processing directly.
+      console.log(`TRANSIENT: Processing audio through agent for room ${roomName}. ` +
+                  'In the future, this will be handled by LiveKit\'s Deepgram integration.');
+      
       // Process audio with AI agent
       const response = await agentData.agent.processAudio(audioData, {
         patientName: options.patientName || 'Patient',
@@ -260,8 +268,6 @@ class LiveKitAgentManager {
       
       console.log(`Processed audio from patient in room ${roomName}`);
       
-      // In a complete implementation, we would stream the audio response
-      // through LiveKit to the patient
       return response;
     } catch (error) {
       console.error(`Error processing patient audio in room ${roomName}:`, error);

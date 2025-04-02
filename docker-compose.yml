@@ -40,9 +40,13 @@ services:
       - ./livekit-sip-config.yaml:/sip/config.yaml
     environment:
       - SIP_TRUNK_ID=local-trunk
+      - DEEPGRAM_API_KEY=
+      - LOG_LEVEL=debug
     restart: unless-stopped
     networks:
       - livekit-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Backend service
   backend:
@@ -68,6 +72,8 @@ services:
       - TWILIO_CREDENTIAL_LIST_PASSWORD=Livekitpassword123
       - DEEPGRAM_URL=http://localhost:9012
       - PUBLIC_HOSTNAME=localhost
+      - DEBUG=livekit:*,sip:*,twilio:*    
+      - LOG_LEVEL=debug                  
     depends_on:
       - livekit
       - livekit-sip

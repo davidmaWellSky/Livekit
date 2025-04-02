@@ -108,14 +108,17 @@ class DeepgramService {
       console.log(`Sending transcription request to: ${this.deepgramUrl}/v1/listen`);
       
       // Send audio data to port-forwarded Deepgram instance
+      // When using port-forwarded instances, don't send the API key as it's handled by the proxy
       const response = await fetchFunc(`${this.deepgramUrl}/v1/listen?${queryParams.toString()}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${this.apiKey}`,
+          // Only add Authorization header if we have a real API key (not for port-forwarded)
+          ...(this.apiKey && this.apiKey !== 'mock-api-key' && this.apiKey !== 'YOUR_DEEPGRAM_API_KEY' ?
+              {'Authorization': `Token ${this.apiKey}`} : {}),
           'Content-Type': options.mimetype || 'audio/webm'
         },
         body: audioData,
-        timeout: 15000 // Extended timeout for telephony audio
+        timeout: 30000 // Extended timeout for telephony audio - increased to 30s
       });
       
       if (!response.ok) {
@@ -244,7 +247,9 @@ class DeepgramService {
       const response = await fetchFunc(`${this.deepgramUrl}/v1/speak`, {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${this.apiKey}`,
+          // Only add Authorization header if we have a real API key (not for port-forwarded)
+          ...(this.apiKey && this.apiKey !== 'mock-api-key' && this.apiKey !== 'YOUR_DEEPGRAM_API_KEY' ?
+              {'Authorization': `Token ${this.apiKey}`} : {}),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

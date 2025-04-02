@@ -96,27 +96,53 @@ class TwilioService {
                        process.env.TWILIO_CREDENTIAL_LIST_USERNAME &&
                        process.env.TWILIO_CREDENTIAL_LIST_PASSWORD;
     
+    // Log SIP configuration status for debugging
+    console.log(`SIP configuration status for call to room ${roomName}:`, {
+      hasSipInfo,
+      hasTrunkSid: !!process.env.TWILIO_TRUNK_SID,
+      hasTerminationUri: !!process.env.TWILIO_TERMINATION_URI,
+      hasCredentials: !!(process.env.TWILIO_CREDENTIAL_LIST_USERNAME && process.env.TWILIO_CREDENTIAL_LIST_PASSWORD),
+      publicHostname: process.env.PUBLIC_HOSTNAME || 'localhost'
+    });
+    
     // If we have SIP info, try to connect via SIP to LiveKit
     if (hasSipInfo) {
       console.log('Generating TwiML with SIP connection to LiveKit room:', roomName);
+      
+      // The SIP URI format should exactly match what's expected by the Twilio PSTN connector
+      // Example: sip:roomName@aiagenticlivekit.pstn.twilio.com;transport=tls
+      const sipUri = `sip:${roomName}@${process.env.TWILIO_TERMINATION_URI};transport=tls`;
+      
+      console.log(`Using SIP URI: ${sipUri} for room ${roomName}`);
+      
+      // Add an error handler to catch any issues during the call
       return `
         <Response>
           <Say voice="alice">${message}</Say>
           <Pause length="1"/>
           <Say voice="alice">Connecting you to your appointment scheduling assistant now.</Say>
-          <Dial timeout="60" timeLimit="1800" ringTone="us" record="record-from-answer">
+          <Dial timeout="120" timeLimit="3600" ringTone="us" record="record-from-answer"
+                action="https://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/dial-status"
+                callerId="${this.twilioPhoneNumber}">
             <Sip username="${process.env.TWILIO_CREDENTIAL_LIST_USERNAME}"
                  password="${process.env.TWILIO_CREDENTIAL_LIST_PASSWORD}"
                  statusCallbackEvent="initiated ringing answered completed"
+                 statusCallback="https://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/sip-status"
+                 statusCallbackMethod="POST"
                  mediaStreamingEnabled="true"
-                 mediaStreamingTrack="both">
-                sip:${roomName}@${process.env.TWILIO_TERMINATION_URI}
+                 mediaStreamingTrack="both"
+                 mediaStreamingEndpoint="wss://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/media">
+               ${sipUri}
             </Sip>
           </Dial>
           <Say voice="alice">Thank you for using our service. Goodbye.</Say>
+          <Hangup/>
         </Response>
       `;
-    }
+     }
+     
+     // Log that we're using the fallback TwiML
+     console.log(`No SIP configuration available for room ${roomName}, using fallback TwiML`);
     
     // If we don't have SIP info, just provide a standard conversation
     return `
@@ -128,7 +154,9 @@ class TwilioService {
           Please try again later or call our main office directly. Thank you for your patience.
         </Say>
         <Pause length="1"/>
-        <Record timeout="5" maxLength="60" playBeep="false" />
+        <Record timeout="5" maxLength="60" playBeep="false"
+                action="https://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/recording-status"
+                method="POST" />
         <Say voice="alice">Thank you for your message. Goodbye.</Say>
         <Hangup />
       </Response>
