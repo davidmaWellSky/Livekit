@@ -16,8 +16,11 @@ redis:
 sip:
   # SIP server binding address
   addr: 0.0.0.0:5060
-  network: udp
+  # Support both UDP and TLS for inbound connections
+  network: [udp, tcp, tls]
   realm: livekit-sip.local
+  # Add additional logging for debugging
+  log_level: debug
   
   # HTTP management API
   http_addr: 0.0.0.0:5080
@@ -64,9 +67,33 @@ trunks:
   - id: local-trunk
     type: generic
     domain: aiagenticlivekit.pstn.twilio.com
-    # Updated to match the actual termination URI
-    uri: "sip:${TWILIO_TRUNK_SID}@aiagenticlivekit.pstn.twilio.com"
-    # Enable debugging for this trunk
+    # Match any phone number in the SIP URI
+    uri: "sip:*@aiagenticlivekit.pstn.twilio.com"
+    # Extract the room parameter from the SIP URI
+    uri_params:
+      - name: room
+        required: true
+    # Use TLS transport to match Twilio's requirements
+    transport: tls
+    # Enable verbose debugging for troubleshooting
     debug: true
+    # Set timeout values to be more generous
+    timeout:
+      invite: 60
+      register: 60
+      transaction: 60
     # Add realm to match the configured domain
     realm: aiagenticlivekit.pstn.twilio.com
+
+# Dispatch rules for routing calls to rooms
+dispatch_rules:
+  - rule: individual
+    room_prefix: "call"
+    default: false
+  - rule: parameter
+    param_name: room
+    default: true
+    # Allow empty room path segments
+    strip_empty_path_segments: true
+    # Allow special characters in room names
+    normalize_path: true

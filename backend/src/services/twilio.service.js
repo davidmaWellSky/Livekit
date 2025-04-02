@@ -109,9 +109,10 @@ class TwilioService {
     if (hasSipInfo) {
       console.log('Generating TwiML with SIP connection to LiveKit room:', roomName);
       
-      // The SIP URI format should exactly match what's expected by the Twilio PSTN connector
-      // Example: sip:roomName@aiagenticlivekit.pstn.twilio.com;transport=tls
-      const sipUri = `sip:${roomName}@${process.env.TWILIO_TERMINATION_URI};transport=tls`;
+      // The SIP URI format needs to follow LiveKit documentation pattern
+      // Use phone number in user part and pass room name as a parameter
+      // Try using TLS transport which is more secure and might be required by Twilio
+      const sipUri = `sip:${this.twilioPhoneNumber.replace('+', '')}@${process.env.TWILIO_TERMINATION_URI};transport=tls;room=${roomName}`;
       
       console.log(`Using SIP URI: ${sipUri} for room ${roomName}`);
       
@@ -121,18 +122,12 @@ class TwilioService {
           <Say voice="alice">${message}</Say>
           <Pause length="1"/>
           <Say voice="alice">Connecting you to your appointment scheduling assistant now.</Say>
-          <Dial timeout="120" timeLimit="3600" ringTone="us" record="record-from-answer"
-                action="https://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/dial-status"
-                callerId="${this.twilioPhoneNumber}">
+          <Dial timeout="120" timeLimit="3600" ringTone="us">
             <Sip username="${process.env.TWILIO_CREDENTIAL_LIST_USERNAME}"
                  password="${process.env.TWILIO_CREDENTIAL_LIST_PASSWORD}"
                  statusCallbackEvent="initiated ringing answered completed"
-                 statusCallback="https://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/sip-status"
-                 statusCallbackMethod="POST"
-                 mediaStreamingEnabled="true"
-                 mediaStreamingTrack="both"
-                 mediaStreamingEndpoint="wss://${process.env.PUBLIC_HOSTNAME || 'localhost'}/twilio/media">
-               ${sipUri}
+                 statusCallbackMethod="POST">
+                ${sipUri}
             </Sip>
           </Dial>
           <Say voice="alice">Thank you for using our service. Goodbye.</Say>
